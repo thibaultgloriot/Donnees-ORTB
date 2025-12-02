@@ -1,0 +1,49 @@
+﻿Indicateur;Nouveau_nom_indicateur;Thématique
+Emissions_de_CO2_equivalent_transport_domicile_travail;Émissions de CO2 équivalent du transport domicile travail (TeqCO2/an);Mobilités
+lineaire_cyclable_securise_pour1000hab;Linéaire cyclable sécurisé total (km);Mobilités
+lineaire_cyclable_securise_total;Linéaire cyclable sécurisé total pour 1000 habitants (km);Mobilités
+nombre_d'aires_de_covoiturage;Nombres d’aires de covoiturage;Mobilités
+nombre_de_bus_en_circulation_de_Crit'air_E;Nombre de bus en circulation de Crit'air E;Décarbonation
+nombre_de_bus_en_circulation_de_Crit'air_E_1;Nombre de bus en circulation de Crit'air E et 1;Décarbonation
+nombre_de_bus_en_circulation_de_Crit'air_E_1_2;Nombre de bus en circulation de Crit'air E et 1 et 2;Décarbonation
+nombre_de_bus_en_circulation_de_Crit'air_E_1_2_3;Nombre de bus en circulation de Crit'air E et 1 et 2 et 3;Décarbonation
+nombre_de_cars_en_circulation_de_Crit'air_E;Nombre de cars en circulation de Crit'air E;Décarbonation
+nombre_de_cars_en_circulation_de_Crit'air_E_1;Nombre de cars en circulation de Crit'air E et 1;Décarbonation
+nombre_de_cars_en_circulation_de_Crit'air_E_1_2;Nombre de cars en circulation de Crit'air E et 1 et 2;Décarbonation
+nombre_de_cars_en_circulation_de_Crit'air_E_1_2_3;Nombre de cars en circulation de Crit'air E et 1 et 2 et 3;Décarbonation
+nombre_de_kilometres_covoiturage_intermédié_depuis_territoire_d'origine;Nombre de kilomètres réalisés en covoiturage intermédié depuis le territoire d'origine;Mobilités
+nombre_de_menages_disposant_au_moins_d'une_voiture;Nombre de ménages disposant au moins d'une voiture;Mobilités
+nombre_de_stations_de_transports_en_commun;Nombre de stations de transports en commun;Mobilités
+nombre_de_stations_de_transports_en_commun_pour_1000_habitants;Nombre de stations de transports en commun pour 1000 habitants;Mobilités
+nombre_de_voitures_en_circulation_de_Crit'air_E;Nombre de voitures en circulation de Crit'air E;Décarbonation
+nombre_de_voitures_en_circulation_de_Crit'air_E_1;Nombre de voitures en circulation de Crit'air E et 1;Décarbonation
+nombre_de_voitures_en_circulation_de_Crit'air_E_1_2;Nombre de voitures en circulation de Crit'air E et 1 et 2;Décarbonation
+nombre_de_voitures_en_circulation_de_Crit'air_E_1_2_3;Nombre de voitures en circulation de Crit'air E et 1 et 2 et 3;Décarbonation
+nombre_de_voitures_neuves_motorisation_alternative;Nombre de voitures neuves en circulation ayant une motorisation alternative ;Mobilités
+part_des_flux_domicile_travail_entrant;Part des flux domicile travail entrant (%);Mobilités
+part_des_flux_domicile_travail_sortant;Part des flux domicile travail sortant (%);Mobilités
+part_des_flux_domicile_travail_interne;Part des flux domicile travail interne (%);Mobilités
+places_de_stationnement_velo_pour1000hab;Places de stationnement vélo pour 1000 habitants;Mobilités
+places_de_stationnement_velo_total;Places de stationnement vélo;Mobilités
+Pourcentage des déplacements_domicile_travail_principalement_réalisés_à_la_marche;Pourcentage des déplacements domicile travail principalement réalisés à la marche (%);Mobilités
+Pourcentage des déplacements_domicile_travail_principalement_réalisés_en_deux_roues_motorisé;Pourcentage des déplacements domicile travail principalement réalisés en deux roues motorisé (%);Mobilités
+Pourcentage des déplacements_domicile_travail_principalement_réalisés_en_modes_actifs;Pourcentage des déplacements domicile travail principalement réalisés en modes actifs (%);Mobilités
+Pourcentage des déplacements_domicile_travail_principalement_réalisés_en_transports_en_commun;Pourcentage des déplacements domicile travail principalement réalisés en transports en commun (%);Mobilités
+Pourcentage des déplacements_domicile_travail_principalement_réalisés_en_vélo;Pourcentage des déplacements domicile travail principalement réalisés en vélo  (%);Mobilités
+Pourcentage des déplacements_domicile_travail_principalement_réalisés_en_voiture;Pourcentage des déplacements domicile travail principalement réalisés en voiture (%);Mobilités
+Pourcentage des déplacements_domicile_travail_principalement_réalisés_sans_transport;Pourcentage des déplacements domicile travail principalement réalisés sans transport (%);Mobilités
+pourcentage_de_menages_disposant_au_moins_d'une_voiture;Pourcentage des ménages disposant au moins d'une voiture (%);Mobilités
+pourcentage_des_bus_en_circulation__de_Crit'air_E;Pourcentage des bus en circulation de Crit'air E (%);Décarbonation
+pourcentage_des_bus_en_circulation__de_Crit'air_E_1;Pourcentage des bus en circulation de Crit'air E et 1 (%);Décarbonation
+pourcentage_des_bus_en_circulation__de_Crit'air_E_1_2;Pourcentage des bus en circulation de Crit'air E et 1 et 2(%);Décarbonation
+pourcentage_des_bus_en_circulation__de_Crit'air_E_1_2_3;Pourcentage des bus en circulation de Crit'air E et 1 et 2 et 3(%);Décarbonation
+pourcentage_des_cars_en_circulation__de_Crit'air_E;Pourcentage des cars en circulation de Crit'air E (%);Décarbonation
+pourcentage_des_cars_en_circulation__de_Crit'air_E_1;Pourcentage des cars en circulation de Crit'air E et 1 (%);Décarbonation
+pourcentage_des_cars_en_circulation__de_Crit'air_E_1_2;Pourcentage des cars en circulation de Crit'air E et 1 et 2(%);Décarbonation
+pourcentage_des_cars_en_circulation__de_Crit'air_E_1_2_3;Pourcentage des cars en circulation de Crit'air E et 1 et 2 et 3(%);Décarbonation
+pourcentage_des_voitures_en_circulation__de_Crit'air_E;Pourcentage des voitures en circulation de Crit'air E (%);Décarbonation
+pourcentage_des_voitures_en_circulation__de_Crit'air_E_1;Pourcentage des voitures en circulation de Crit'air E et 1 (%);Décarbonation
+pourcentage_des_voitures_en_circulation__de_Crit'air_E_1_2;Pourcentage des voitures en circulation de Crit'air E et 1 et 2(%);Décarbonation
+pourcentage_des_voitures_en_circulation__de_Crit'air_E_1_2_3;Pourcentage des voitures en circulation de Crit'air E et 1 et 2 et 3(%);Décarbonation
+pourcentage_des_voitures_neuves_motorisation_alternative;Pourcentage des voitures neuves en circulation ayant une motorisation alternative (%);Décarbonation
+Taux_de_couverture_plan_de_mobilité;Taux de couverture du territoire en plan de mobilité;Mobilités
