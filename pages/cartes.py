@@ -55,7 +55,7 @@ def show(df, epci_df):
     st.title("📊 Visualisation Cartographique des indicateurs de l'ORTB")
     thematiques = sorted(df['thematique'].unique()) if 'thematique' in df.columns else ['Tous']
     
-    col1, col2, col3, col4 = st.columns([1, 0.7, 2, 0.5])
+    col1, col2, col3, col4 = st.columns([1, 0.7, 1.7, 0.5])
     
     with col1:
         echelle = st.radio(
@@ -290,3 +290,4 @@ def show(df, epci_df):
     display_df['date'] = display_df['date'].dt.strftime('%d/%m/%Y')
     
     st.dataframe(display_df, use_container_width=True, key="carte_dataframe")
+
