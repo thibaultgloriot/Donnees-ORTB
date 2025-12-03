@@ -150,7 +150,7 @@ if selected_module:
         elif selected_module == "cartes":
             module.show(df, epci_df)
         elif selected_module == "donnees_brutes":
-            module.show(df)
+            module.show(df, epci_df)
         elif selected_module == "a_propos":
             module.show()
         else:
@@ -173,9 +173,10 @@ if selected_module:
             cartes.show(df, epci_df)
         elif selected_module == "donnees_brutes":
             import pages.donnees_brutes
-            pages.donnees_brutes.show(df)
+            pages.donnees_brutes.show(df,epci_df)
         else:
             st.title(f"Page: {selected_page_name}")
             st.write("Cette page est en cours de développement.")
 else:
     st.error("Page non trouvée")
+
