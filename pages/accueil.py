@@ -15,7 +15,7 @@ def show(df, epci_df):
     
     with col3:
         if epci_df is not None:
-            st.metric("Nombre d'EPCI", epci_df['code_epci'].nunique())
+            st.metric("Nombre d'EPCI", 59)
         else:
             st.metric("Période couverte", f"{df['date'].min().year}-{df['date'].max().year}")
     
@@ -30,4 +30,5 @@ def show(df, epci_df):
                     st.write(f"• {ind}")
     else:
         for ind in sorted(df['indicateur'].unique()):
+
             st.write(f"• {ind}")
