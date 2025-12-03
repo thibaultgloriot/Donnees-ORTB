@@ -10,351 +10,252 @@ def show(df_communes, df_epci):
         st.error("Aucune donnée fournie. Veuillez fournir au moins un DataFrame (communes ou EPCI).")
         return
     
-    # Combiner les DataFrames si les deux sont fournis
+    # Préparer les DataFrames
     if df_communes is not None and df_epci is not None:
-        # Ajouter une colonne pour identifier la source
-        df_communes = df_communes.copy()
-        df_epci = df_epci.copy()
+        # Préparer les deux DataFrames séparément
+        df_communes_prepared = df_communes.copy()
+        df_epci_prepared = df_epci.copy()
         
-        if 'maille' not in df_communes.columns:
-            df_communes['maille'] = 'Commune'
-        if 'maille' not in df_epci.columns:
-            df_epci['maille'] = 'EPCI'
+        # Ajouter colonne maille
+        if 'maille' not in df_communes_prepared.columns:
+            df_communes_prepared['maille'] = 'Commune'
+        if 'maille' not in df_epci_prepared.columns:
+            df_epci_prepared['maille'] = 'EPCI'
+            
+        # Utiliser le DataFrame correspondant à la maille sélectionnée
+        df_dict = {
+            'Commune': df_communes_prepared,
+            'EPCI': df_epci_prepared
+        }
         
-        # Combiner les DataFrames
-        df = pd.concat([df_communes, df_epci], ignore_index=True)
-        
-        # Vérifier les colonnes nécessaires
-        required_columns = ['date', 'indicateur', 'thematique']
-        for col in required_columns:
-            if col not in df.columns:
-                st.error(f"Colonne manquante dans les données combinées : {col}")
-                return
-                
     elif df_communes is not None:
-        df = df_communes.copy()
-        if 'maille' not in df.columns:
-            df['maille'] = 'Commune'
-            
-        # Vérifier les colonnes nécessaires
-        required_columns = ['date', 'indicateur', 'thematique']
-        for col in required_columns:
-            if col not in df.columns:
-                st.error(f"Colonne manquante dans les données communes : {col}")
-                return
-                
+        df_communes_prepared = df_communes.copy()
+        if 'maille' not in df_communes_prepared.columns:
+            df_communes_prepared['maille'] = 'Commune'
+        df_dict = {'Commune': df_communes_prepared}
+        
     else:  # seulement df_epci
-        df = df_epci.copy()
-        if 'maille' not in df.columns:
-            df['maille'] = 'EPCI'
-            
-        # Vérifier les colonnes nécessaires
-        required_columns = ['date', 'indicateur', 'thematique']
-        for col in required_columns:
-            if col not in df.columns:
-                st.error(f"Colonne manquante dans les données EPCI : {col}")
-                return
+        df_epci_prepared = df_epci.copy()
+        if 'maille' not in df_epci_prepared.columns:
+            df_epci_prepared['maille'] = 'EPCI'
+        df_dict = {'EPCI': df_epci_prepared}
     
     # Sidebar pour les filtres
     with st.sidebar:
         st.header("🔍 Filtres")
         
-        # Message d'instruction
         st.markdown("---")
         st.info("ℹ️ Veuillez sélectionner vos filtres ci-dessous")
         st.markdown("---")
         
-        # Déterminer les options disponibles pour la maille
-        maille_options = []
-        if df_communes is not None:
-            maille_options.append('Commune')
-        if df_epci is not None:
-            maille_options.append('EPCI')
+        # Options de maille disponibles
+        maille_options = list(df_dict.keys())
         
-        if not maille_options:
-            st.error("Aucune donnée disponible pour les mailles")
-            return
-        
-        # Sélection de la maille avec une clé unique
+        # Sélection de la maille avec clé statique
         maille = st.selectbox(
             "Maille territoriale",
             options=maille_options,
             index=0,
-            key="selectbox_maille_territoriale"  # Clé unique pour éviter l'erreur
+            key="maille_territoriale_select"
         )
         
-        # Initialiser les variables de sélection
-        codes_selection = []
+        # Récupérer le DataFrame pour cette maille
+        current_df = df_dict[maille]
         
-        # Filtre par commune (avec nom)
-        if maille == 'Commune' and df_communes is not None:
-            # Créer un DataFrame temporaire pour les communes
-            df_temp = df_communes.copy() if df_communes is not None else df[df['maille'] == 'Commune'].copy()
-            
-            # Vérifier si on a le nom des communes
-            if 'libelle_commune' in df_temp.columns:
-                # Créer un mapping code_commune -> libelle_commune
-                communes_data = df_temp[['code_commune', 'libelle_commune']].dropna().drop_duplicates()
-                if not communes_data.empty:
-                    communes_dict = dict(zip(communes_data['libelle_commune'], communes_data['code_commune']))
-                    communes_names = sorted(communes_data['libelle_commune'].unique().tolist())
+        # Initialiser les sélections
+        codes_selection = []
+        thematiques_selection = []
+        indicateurs_selection = []
+        dates_selection = []
+        
+        # Filtrer par territoire selon la maille
+        if maille == 'Commune':
+            # Utiliser libelle_commune si disponible
+            if 'libelle_commune' in current_df.columns:
+                communes = sorted(current_df['libelle_commune'].dropna().unique().tolist())
+                if communes:
+                    selected_communes = st.multiselect(
+                        "Sélectionner les communes",
+                        options=communes,
+                        default=[],
+                        key="communes_select"
+                    )
                     
-                    col1, col2 = st.columns([3, 1])
-                    with col1:
-                        communes_selection = st.multiselect(
-                            "Sélectionner les communes",
-                            options=communes_names,
-                            default=[],
-                            key="multiselect_communes_names"  # Clé unique
-                        )
-                    with col2:
-                        if st.button("Tout", key="button_all_communes"):
-                            if 'communes_selection' not in st.session_state:
-                                st.session_state['communes_selection'] = communes_names
-                            else:
-                                st.session_state['communes_selection'] = communes_names
-                            st.rerun()
+                    # Bouton Tout pour communes
+                    col_btn1, col_btn2 = st.columns(2)
+                    with col_btn1:
+                        if st.button("Tout", key="btn_all_communes"):
+                            selected_communes = communes
+                    with col_btn2:
+                        if st.button("Aucun", key="btn_no_communes"):
+                            selected_communes = []
                     
-                    # Vérifier si une sélection est en session
-                    if 'communes_selection' in st.session_state and st.session_state['communes_selection']:
-                        communes_selection = st.session_state['communes_selection']
-                    
-                    # Convertir les noms sélectionnés en codes
-                    codes_selection = [communes_dict[name] for name in communes_selection] if communes_selection else []
-                    
+                    # Convertir noms en codes si besoin
+                    if selected_communes and 'code_commune' in current_df.columns:
+                        # Créer un mapping temporaire
+                        temp_df = current_df[['code_commune', 'libelle_commune']].drop_duplicates()
+                        mapping = dict(zip(temp_df['libelle_commune'], temp_df['code_commune']))
+                        codes_selection = [mapping.get(name) for name in selected_communes if name in mapping]
                 else:
-                    st.info("Aucune donnée de commune disponible")
-            
-            elif 'code_commune' in df_temp.columns:
-                # Fallback sur les codes si pas de libellé
-                codes = sorted(df_temp['code_commune'].dropna().unique().astype(str).tolist())
+                    st.info("Aucune commune disponible")
+            elif 'code_commune' in current_df.columns:
+                codes = sorted(current_df['code_commune'].dropna().unique().astype(str).tolist())
                 if codes:
-                    col1, col2 = st.columns([3, 1])
-                    with col1:
-                        codes_selection = st.multiselect(
-                            "Sélectionner les communes (codes)",
-                            options=codes,
-                            default=[],
-                            key="multiselect_communes_codes"  # Clé unique
-                        )
-                    with col2:
-                        if st.button("Tout", key="button_all_communes_codes"):
-                            if 'communes_codes_selection' not in st.session_state:
-                                st.session_state['communes_codes_selection'] = codes
-                            else:
-                                st.session_state['communes_codes_selection'] = codes
-                            st.rerun()
+                    codes_selection = st.multiselect(
+                        "Sélectionner les communes (codes)",
+                        options=codes,
+                        default=[],
+                        key="communes_codes_select"
+                    )
                     
-                    # Vérifier si une sélection est en session
-                    if 'communes_codes_selection' in st.session_state and st.session_state['communes_codes_selection']:
-                        codes_selection = st.session_state['communes_codes_selection']
-                        
+                    col_btn1, col_btn2 = st.columns(2)
+                    with col_btn1:
+                        if st.button("Tout", key="btn_all_communes_codes"):
+                            codes_selection = codes
+                    with col_btn2:
+                        if st.button("Aucun", key="btn_no_communes_codes"):
+                            codes_selection = []
                 else:
                     st.info("Aucun code de commune disponible")
-        
-        # Filtre par EPCI
-        elif maille == 'EPCI' and df_epci is not None:
-            # Créer un DataFrame temporaire pour les EPCI
-            df_temp = df_epci.copy() if df_epci is not None else df[df['maille'] == 'EPCI'].copy()
-            
-            # Essayer d'abord avec le libellé si disponible
-            if 'libelle_epci' in df_temp.columns:
-                epci_data = df_temp[['code_epci', 'libelle_epci']].dropna().drop_duplicates()
-                if not epci_data.empty:
-                    epci_dict = dict(zip(epci_data['libelle_epci'], epci_data['code_epci']))
-                    epci_names = sorted(epci_data['libelle_epci'].unique().tolist())
                     
-                    col1, col2 = st.columns([3, 1])
-                    with col1:
-                        epci_selection = st.multiselect(
-                            "Sélectionner les EPCI",
-                            options=epci_names,
-                            default=[],
-                            key="multiselect_epci_names"  # Clé unique
-                        )
-                    with col2:
-                        if st.button("Tout", key="button_all_epci"):
-                            if 'epci_selection' not in st.session_state:
-                                st.session_state['epci_selection'] = epci_names
-                            else:
-                                st.session_state['epci_selection'] = epci_names
-                            st.rerun()
+        elif maille == 'EPCI':
+            # Utiliser libelle_epci si disponible
+            if 'libelle_epci' in current_df.columns:
+                epcis = sorted(current_df['libelle_epci'].dropna().unique().tolist())
+                if epcis:
+                    selected_epcis = st.multiselect(
+                        "Sélectionner les EPCI",
+                        options=epcis,
+                        default=[],
+                        key="epci_select"
+                    )
                     
-                    # Vérifier si une sélection est en session
-                    if 'epci_selection' in st.session_state and st.session_state['epci_selection']:
-                        epci_selection = st.session_state['epci_selection']
+                    col_btn1, col_btn2 = st.columns(2)
+                    with col_btn1:
+                        if st.button("Tout", key="btn_all_epci"):
+                            selected_epcis = epcis
+                    with col_btn2:
+                        if st.button("Aucun", key="btn_no_epci"):
+                            selected_epcis = []
                     
-                    codes_selection = [epci_dict[name] for name in epci_selection] if epci_selection else []
-                    
+                    # Convertir noms en codes si besoin
+                    if selected_epcis and 'code_epci' in current_df.columns:
+                        temp_df = current_df[['code_epci', 'libelle_epci']].drop_duplicates()
+                        mapping = dict(zip(temp_df['libelle_epci'], temp_df['code_epci']))
+                        codes_selection = [mapping.get(name) for name in selected_epcis if name in mapping]
                 else:
-                    st.info("Aucune donnée d'EPCI disponible")
-            
-            else:
-                # Fallback sur les codes
-                codes = sorted(df_temp['code_epci'].dropna().unique().astype(str).tolist())
+                    st.info("Aucun EPCI disponible")
+            elif 'code_epci' in current_df.columns:
+                codes = sorted(current_df['code_epci'].dropna().unique().astype(str).tolist())
                 if codes:
-                    col1, col2 = st.columns([3, 1])
-                    with col1:
-                        codes_selection = st.multiselect(
-                            "Sélectionner les EPCI (codes)",
-                            options=codes,
-                            default=[],
-                            key="multiselect_epci_codes"  # Clé unique
-                        )
-                    with col2:
-                        if st.button("Tout", key="button_all_epci_codes"):
-                            if 'epci_codes_selection' not in st.session_state:
-                                st.session_state['epci_codes_selection'] = codes
-                            else:
-                                st.session_state['epci_codes_selection'] = codes
-                            st.rerun()
+                    codes_selection = st.multiselect(
+                        "Sélectionner les EPCI (codes)",
+                        options=codes,
+                        default=[],
+                        key="epci_codes_select"
+                    )
                     
-                    # Vérifier si une sélection est en session
-                    if 'epci_codes_selection' in st.session_state and st.session_state['epci_codes_selection']:
-                        codes_selection = st.session_state['epci_codes_selection']
-                        
+                    col_btn1, col_btn2 = st.columns(2)
+                    with col_btn1:
+                        if st.button("Tout", key="btn_all_epci_codes"):
+                            codes_selection = codes
+                    with col_btn2:
+                        if st.button("Aucun", key="btn_no_epci_codes"):
+                            codes_selection = []
                 else:
                     st.info("Aucun code d'EPCI disponible")
         
-        # Filtre par thématique
-        thematiques_selection = []
-        if 'thematique' in df.columns:
-            thematiques = sorted(df['thematique'].dropna().unique().tolist())
+        # Filtrer par thématique
+        if 'thematique' in current_df.columns:
+            thematiques = sorted(current_df['thematique'].dropna().unique().tolist())
             if thematiques:
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    thematiques_selection = st.multiselect(
-                        "Sélectionner les thématiques",
-                        options=thematiques,
-                        default=[],
-                        key="multiselect_thematiques"  # Clé unique
-                    )
-                with col2:
-                    if st.button("Tout", key="button_all_thematiques"):
-                        if 'thematiques_selection' not in st.session_state:
-                            st.session_state['thematiques_selection'] = thematiques
-                        else:
-                            st.session_state['thematiques_selection'] = thematiques
-                        st.rerun()
+                thematiques_selection = st.multiselect(
+                    "Sélectionner les thématiques",
+                    options=thematiques,
+                    default=[],
+                    key="thematiques_select"
+                )
                 
-                # Vérifier si une sélection est en session
-                if 'thematiques_selection' in st.session_state and st.session_state['thematiques_selection']:
-                    thematiques_selection = st.session_state['thematiques_selection']
+                col_btn1, col_btn2 = st.columns(2)
+                with col_btn1:
+                    if st.button("Tout", key="btn_all_thematiques"):
+                        thematiques_selection = thematiques
+                with col_btn2:
+                    if st.button("Aucun", key="btn_no_thematiques"):
+                        thematiques_selection = []
             else:
                 st.info("Aucune thématique disponible")
         
-        # Filtre par indicateur
-        indicateurs_selection = []
-        if 'indicateur' in df.columns:
-            indicateurs = sorted(df['indicateur'].dropna().unique().tolist())
+        # Filtrer par indicateur
+        if 'indicateur' in current_df.columns:
+            indicateurs = sorted(current_df['indicateur'].dropna().unique().tolist())
             if indicateurs:
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    indicateurs_selection = st.multiselect(
-                        "Sélectionner les indicateurs",
-                        options=indicateurs,
-                        default=[],
-                        key="multiselect_indicateurs"  # Clé unique
-                    )
-                with col2:
-                    if st.button("Tout", key="button_all_indicateurs"):
-                        if 'indicateurs_selection' not in st.session_state:
-                            st.session_state['indicateurs_selection'] = indicateurs
-                        else:
-                            st.session_state['indicateurs_selection'] = indicateurs
-                        st.rerun()
+                indicateurs_selection = st.multiselect(
+                    "Sélectionner les indicateurs",
+                    options=indicateurs,
+                    default=[],
+                    key="indicateurs_select"
+                )
                 
-                # Vérifier si une sélection est en session
-                if 'indicateurs_selection' in st.session_state and st.session_state['indicateurs_selection']:
-                    indicateurs_selection = st.session_state['indicateurs_selection']
+                col_btn1, col_btn2 = st.columns(2)
+                with col_btn1:
+                    if st.button("Tout", key="btn_all_indicateurs"):
+                        indicateurs_selection = indicateurs
+                with col_btn2:
+                    if st.button("Aucun", key="btn_no_indicateurs"):
+                        indicateurs_selection = []
             else:
                 st.info("Aucun indicateur disponible")
         
-        # Filtre par date
-        dates_selection = []
-        if 'date' in df.columns:
-            dates = sorted(df['date'].dropna().unique())
+        # Filtrer par date
+        if 'date' in current_df.columns:
+            dates = sorted(current_df['date'].dropna().unique())
             if len(dates) > 0:
                 dates_str = [d.strftime('%Y-%m-%d') if hasattr(d, 'strftime') else str(d) for d in dates]
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    dates_selection = st.multiselect(
-                        "Sélectionner les dates",
-                        options=dates_str,
-                        default=[],
-                        key="multiselect_dates"  # Clé unique
-                    )
-                with col2:
-                    if st.button("Tout", key="button_all_dates"):
-                        if 'dates_selection' not in st.session_state:
-                            st.session_state['dates_selection'] = dates_str
-                        else:
-                            st.session_state['dates_selection'] = dates_str
-                        st.rerun()
+                dates_selection = st.multiselect(
+                    "Sélectionner les dates",
+                    options=dates_str,
+                    default=[],
+                    key="dates_select"
+                )
                 
-                # Vérifier si une sélection est en session
-                if 'dates_selection' in st.session_state and st.session_state['dates_selection']:
-                    dates_selection = st.session_state['dates_selection']
+                col_btn1, col_btn2 = st.columns(2)
+                with col_btn1:
+                    if st.button("Tout", key="btn_all_dates"):
+                        dates_selection = dates_str
+                with col_btn2:
+                    if st.button("Aucun", key="btn_no_dates"):
+                        dates_selection = []
             else:
                 st.info("Aucune date disponible")
         
         st.markdown("---")
         
-        # Bouton pour tout remplir (sauf territoires)
-        if st.button("🧹 Tout remplir (sauf territoires)", type="primary", use_container_width=True, key="button_fill_all"):
-            # Réinitialiser les sélections de territoires
-            if 'communes_selection' in st.session_state:
-                del st.session_state['communes_selection']
-            if 'communes_codes_selection' in st.session_state:
-                del st.session_state['communes_codes_selection']
-            if 'epci_selection' in st.session_state:
-                del st.session_state['epci_selection']
-            if 'epci_codes_selection' in st.session_state:
-                del st.session_state['epci_codes_selection']
-            
-            # Remplir les autres filtres
-            if 'thematique' in df.columns:
-                thematiques = sorted(df['thematique'].dropna().unique().tolist())
-                st.session_state['thematiques_selection'] = thematiques
-            
-            if 'indicateur' in df.columns:
-                indicateurs = sorted(df['indicateur'].dropna().unique().tolist())
-                st.session_state['indicateurs_selection'] = indicateurs
-            
-            if 'date' in df.columns:
-                dates = sorted(df['date'].dropna().unique())
-                dates_str = [d.strftime('%Y-%m-%d') if hasattr(d, 'strftime') else str(d) for d in dates]
-                st.session_state['dates_selection'] = dates_str
-            
-            st.rerun()
-        
-        # Bouton pour tout vider
-        if st.button("🗑️ Tout vider", use_container_width=True, key="button_clear_all"):
-            # Supprimer toutes les clés de session liées aux sélections
-            keys_to_delete = []
-            for key in st.session_state.keys():
-                if key.endswith('_selection') or key.startswith('all_'):
-                    keys_to_delete.append(key)
-            
-            for key in keys_to_delete:
-                del st.session_state[key]
-            
-            st.rerun()
+        # Boutons d'action
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🧹 Tout remplir", type="primary", use_container_width=True, key="btn_fill_all"):
+                # Le rerun sera géré par les boutons individuels
+                st.info("Utilisez les boutons 'Tout' de chaque section")
+        with col2:
+            if st.button("🗑️ Réinitialiser", use_container_width=True, key="btn_reset"):
+                # Réinitialiser les sélections
+                st.session_state.clear()
+                st.rerun()
     
-    # Message principal avant les données
+    # Zone principale
     main_container = st.container()
     
     # Vérifier si des filtres sont sélectionnés
-    any_filter_selected = (
-        codes_selection or
-        thematiques_selection or
-        indicateurs_selection or
-        dates_selection
+    has_filters = (
+        (codes_selection and len(codes_selection) > 0) or
+        (thematiques_selection and len(thematiques_selection) > 0) or
+        (indicateurs_selection and len(indicateurs_selection) > 0) or
+        (dates_selection and len(dates_selection) > 0)
     )
     
-    # Afficher les données ou le message d'instruction
     with main_container:
-        if not any_filter_selected:
+        if not has_filters:
             st.markdown("---")
             st.markdown("### 📋 Instructions")
             st.info("""
@@ -364,82 +265,73 @@ def show(df_communes, df_epci):
             2. **Sélectionnez les territoires** concernés
             3. **Filtrez par thématique**, indicateur ou date selon vos besoins
             4. Utilisez les boutons **"Tout"** pour sélectionner toutes les options d'un filtre
-            5. Cliquez sur **"Tout remplir (sauf territoires)"** pour sélectionner toutes les thématiques, indicateurs et dates
+            5. Utilisez les boutons **"Aucun"** pour effacer la sélection
             
             Les données s'afficheront automatiquement une fois les filtres sélectionnés.
             """)
             st.markdown("---")
             return
         
-        # Application des filtres
-        filtered_df = df.copy()
+        # Appliquer les filtres
+        filtered_df = current_df.copy()
         
-        # Filtrer par maille
-        filtered_df = filtered_df[filtered_df['maille'] == maille]
-        
-        # Filtre par code territorial
-        if codes_selection:
+        # Filtrer par territoire
+        if codes_selection and len(codes_selection) > 0:
             if maille == 'Commune' and 'code_commune' in filtered_df.columns:
-                filtered_df = filtered_df[filtered_df['code_commune'].astype(str).isin(codes_selection)]
+                filtered_df = filtered_df[filtered_df['code_commune'].astype(str).isin([str(c) for c in codes_selection])]
             elif maille == 'EPCI' and 'code_epci' in filtered_df.columns:
-                filtered_df = filtered_df[filtered_df['code_epci'].astype(str).isin(codes_selection)]
+                filtered_df = filtered_df[filtered_df['code_epci'].astype(str).isin([str(c) for c in codes_selection])]
         
-        # Filtre par thématique
-        if thematiques_selection:
+        # Filtrer par thématique
+        if thematiques_selection and len(thematiques_selection) > 0:
             filtered_df = filtered_df[filtered_df['thematique'].isin(thematiques_selection)]
         
-        # Filtre par indicateur
-        if indicateurs_selection:
+        # Filtrer par indicateur
+        if indicateurs_selection and len(indicateurs_selection) > 0:
             filtered_df = filtered_df[filtered_df['indicateur'].isin(indicateurs_selection)]
         
-        # Filtre par date
-        if dates_selection:
+        # Filtrer par date
+        if dates_selection and len(dates_selection) > 0:
             filtered_df = filtered_df[filtered_df['date'].astype(str).isin(dates_selection)]
         
-        # Affichage des statistiques
-        st.markdown(f"**📊 {len(filtered_df)} lignes filtrées**")
-        
+        # Afficher les résultats
         if len(filtered_df) == 0:
             st.warning("Aucune donnée ne correspond aux filtres sélectionnés.")
             return
         
-        # Réorganiser les colonnes pour une meilleure lisibilité
+        st.markdown(f"**📊 {len(filtered_df)} lignes filtrées**")
+        
+        # Préparer l'affichage
         display_df = filtered_df.copy()
         
-        # Définir l'ordre des colonnes préféré
-        preferred_order = []
+        # Réorganiser les colonnes
+        col_order = []
         
-        # Ajouter les colonnes territoriales en fonction de la maille
+        # Colonnes territoriales selon la maille
         if maille == 'Commune':
             if 'libelle_commune' in display_df.columns:
-                preferred_order.append('libelle_commune')
+                col_order.append('libelle_commune')
             if 'code_commune' in display_df.columns:
-                preferred_order.append('code_commune')
-        else:  # EPCI
+                col_order.append('code_commune')
+        else:
             if 'libelle_epci' in display_df.columns:
-                preferred_order.append('libelle_epci')
+                col_order.append('libelle_epci')
             if 'code_epci' in display_df.columns:
-                preferred_order.append('code_epci')
+                col_order.append('code_epci')
         
-        # Ajouter la maille
-        preferred_order.append('maille')
+        # Colonnes principales
+        main_cols = ['maille', 'date', 'thematique', 'indicateur', 'valeur', 'unite']
+        for col in main_cols:
+            if col in display_df.columns and col not in col_order:
+                col_order.append(col)
         
-        # Ajouter les autres colonnes importantes
-        important_cols = ['date', 'thematique', 'indicateur', 'valeur', 'unite']
-        for col in important_cols:
-            if col in display_df.columns and col not in preferred_order:
-                preferred_order.append(col)
+        # Autres colonnes
+        other_cols = [c for c in display_df.columns if c not in col_order]
+        final_order = col_order + other_cols
         
-        # Ajouter les colonnes restantes
-        remaining_cols = [col for col in display_df.columns if col not in preferred_order]
-        final_order = preferred_order + remaining_cols
-        
-        # Réorganiser le DataFrame
-        display_df = display_df[final_order]
-        
-        # Affichage des données
+        # Afficher le DataFrame
         st.dataframe(
-            display_df,
+            display_df[final_order],
             use_container_width=True,
             height=400
         )
@@ -447,29 +339,28 @@ def show(df_communes, df_epci):
         # Téléchargement
         csv = filtered_df.to_csv(index=False, encoding='utf-8-sig')
         st.download_button(
-            label="📥 Télécharger les données filtrées (CSV)",
+            label="📥 Télécharger les données (CSV)",
             data=csv,
             file_name=f"donnees_{maille.lower()}_filtrees.csv",
             mime="text/csv",
             use_container_width=True
         )
         
-        # Affichage des métriques
+        # Métriques
         st.markdown("---")
-        st.markdown("### 📈 Statistiques des données filtrées")
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Nombre de lignes", len(filtered_df))
-        with col2:
-            st.metric("Nombre d'indicateurs", filtered_df['indicateur'].nunique())
-        with col3:
-            st.metric("Nombre de thématiques", filtered_df['thematique'].nunique())
-        with col4:
+        st.markdown("### 📈 Statistiques")
+        
+        cols = st.columns(4)
+        with cols[0]:
+            st.metric("Lignes", len(filtered_df))
+        with cols[1]:
+            st.metric("Indicateurs", filtered_df['indicateur'].nunique())
+        with cols[2]:
+            st.metric("Thématiques", filtered_df['thematique'].nunique())
+        with cols[3]:
             if 'date' in filtered_df.columns and len(filtered_df) > 0:
-                dates_min = filtered_df['date'].min()
-                dates_max = filtered_df['date'].max()
-                min_str = dates_min.strftime('%Y-%m-%d') if hasattr(dates_min, 'strftime') else str(dates_min)
-                max_str = dates_max.strftime('%Y-%m-%d') if hasattr(dates_max, 'strftime') else str(dates_max)
-                st.metric("Période couverte", f"{min_str} à {max_str}")
-            else:
-                st.metric("Période couverte", "N/A")
+                date_min = filtered_df['date'].min()
+                date_max = filtered_df['date'].max()
+                min_str = date_min.strftime('%d/%m/%Y') if hasattr(date_min, 'strftime') else str(date_min)
+                max_str = date_max.strftime('%d/%m/%Y') if hasattr(date_max, 'strftime') else str(date_max)
+                st.metric("Période", f"{min_str} à {max_str}")
