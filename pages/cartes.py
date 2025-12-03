@@ -261,8 +261,7 @@ def show(df, epci_df):
             range_color=range_color,
             scope="europe",
             center={"lat": 46.8, "lon": -2.3},
-            title=f"{selected_indicateur} à l'échelle EPCI pour la date {selected_date_str}<br><sub>{range_note}</sub>{source_text}",
-            subtitle="unité = unité")
+            title=f"{selected_indicateur} à l'échelle EPCI pour la date {selected_date_str}<br><sub>{range_note}</sub>{source_text}")
     
     fig.update_geos(fitbounds="locations", visible=False)
     fig.update_layout(width=1000, height=1000)
@@ -290,5 +289,6 @@ def show(df, epci_df):
     display_df['date'] = display_df['date'].dt.strftime('%d/%m/%Y')
     
     st.dataframe(display_df, use_container_width=True, key="carte_dataframe")
+
 
 
