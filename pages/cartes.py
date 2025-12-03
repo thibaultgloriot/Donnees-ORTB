@@ -11,6 +11,21 @@ def load_geojson(filepath):
     with open(filepath, 'r') as f:
         return json.load(f)
 
+@st.cache_data
+def load_indicator_sources():
+    """Charge les sources des indicateurs depuis le fichier CSV"""
+    try:
+        sources_df = pd.read_csv("data/columns_indicateurs.csv", sep=";")
+        # Créer un dictionnaire indicateur -> source
+        # Utiliser 'Nouveau_nom_indicateur' si disponible, sinon 'Indicateur'
+        if 'Nouveau_nom_indicateur' in sources_df.columns:
+            sources_dict = dict(zip(sources_df['Nouveau_nom_indicateur'], sources_df.get('Source', '')))
+        else:
+            sources_dict = dict(zip(sources_df['Indicateur'], sources_df.get('Source', '')))
+        return sources_dict
+    except Exception as e:
+        st.warning(f"Impossible de charger les sources des indicateurs: {e}")
+        return {}
 
 def get_scale_options(df, column):
     """Calcule les différentes échelles de représentation"""
@@ -34,9 +49,11 @@ def get_scale_options(df, column):
     return linear_scale, percentile_scale, std_scale
 
 def show(df, epci_df):
+    # Charger les sources des indicateurs
+    indicator_sources = load_indicator_sources()
+    
     st.title("📊 Visualisation Cartographique des indicateurs de l'ORTB")
     thematiques = sorted(df['thematique'].unique()) if 'thematique' in df.columns else ['Tous']
-    
     
     col1, col2, col3, col4 = st.columns([1, 0.7, 2, 0.5])
     
@@ -44,12 +61,17 @@ def show(df, epci_df):
         echelle = st.radio(
             "Échelle géographique",
             options=["Commune", "EPCI"],
-            horizontal=True
+            horizontal=True,
+            key="carte_radio_echelle"  # Clé unique
         )
     
     with col2:
         if len(thematiques) > 1:
-            selected_thematique = st.selectbox("Thématique", ["Toutes"] + list(thematiques))
+            selected_thematique = st.selectbox(
+                "Thématique", 
+                ["Toutes"] + list(thematiques),
+                key="carte_select_thematique"  # Clé unique
+            )
         else:
             selected_thematique = "Toutes"
     
@@ -66,9 +88,11 @@ def show(df, epci_df):
             else:
                 indicateurs = epci_df['indicateur'].unique() if epci_df is not None else []
         
-        selected_indicateur = st.selectbox("Indicateur", indicateurs)
-        
-
+        selected_indicateur = st.selectbox(
+            "Indicateur", 
+            indicateurs,
+            key="carte_select_indicateur"  # Clé unique
+        )
     
     with col4:
         if echelle == "Commune":
@@ -85,7 +109,8 @@ def show(df, epci_df):
             selected_date_str = st.selectbox(
                 "Sélectionnez la date",
                 options=dates_options,
-                index=len(dates_options)-1
+                index=len(dates_options)-1,
+                key="carte_select_date"  # Clé unique
             )
             selected_date = datetime.strptime(selected_date_str, '%d/%m/%Y')
         else:
@@ -100,7 +125,8 @@ def show(df, epci_df):
         # Options d'échelle de couleur
         scale_options = st.selectbox(
             "Échelle de couleur",
-            options=["Blues","Greens","Darkmint","ice"]
+            options=["Blues","Greens","Darkmint","ice"],
+            key="carte_select_scale"  # Clé unique
         )
     
     with col_scale2:
@@ -111,12 +137,16 @@ def show(df, epci_df):
                 "Échelle complète (min-max)",
                 "Percentiles (5-95%)", 
                 "Moyenne ± 2 écarts-types"
-            ]
+            ],
+            key="carte_select_stat_scale"  # Clé unique
         )
     
     with col_scale3:
         # Option pour inverser l'échelle de couleur
-        reverse_scale = st.checkbox("Inverser l'échelle de couleur")
+        reverse_scale = st.checkbox(
+            "Inverser l'échelle de couleur",
+            key="carte_checkbox_reverse"  # Clé unique
+        )
     
     # Filtrage des données selon l'échelle
     if echelle == "Commune":
@@ -153,6 +183,13 @@ def show(df, epci_df):
         # Récupérer le GeoJSON
         communes_geojson = load_geojson("data/communes_simple.geojson")
         
+        # Ajout de la source
+        source_text = ""
+        if selected_indicateur in indicator_sources:
+            source_val = indicator_sources[selected_indicateur]
+            if pd.notna(source_val) and str(source_val).strip():
+                source_text = f"<br><sub>Source : {source_val}</sub>"
+        
         # Créer la carte
         fig = px.choropleth(
             filtered_df,
@@ -166,7 +203,7 @@ def show(df, epci_df):
             range_color=range_color,
             scope="europe",
             center={"lat": 46.8, "lon": -2.3},
-            title=f"{selected_indicateur} à l'échelle communale pour la date {selected_date_str}<br><sub>{range_note}</sub>")
+            title=f"{selected_indicateur} à l'échelle communale pour la date {selected_date_str}<br><sub>{range_note}</sub>{source_text}")
         
     else:  # EPCI
         filtered_df = epci_df[
@@ -204,6 +241,13 @@ def show(df, epci_df):
         # Récupérer le GeoJSON
         epci_geojson = load_geojson("data/epci_simple.geojson")
         
+        # Ajout de la source
+        source_text = ""
+        if selected_indicateur in indicator_sources:
+            source_val = indicator_sources[selected_indicateur]
+            if pd.notna(source_val) and str(source_val).strip():
+                source_text = f"<br><sub>Source : {source_val}</sub>"
+        
         # Créer la carte
         fig = px.choropleth(
             filtered_df,
@@ -217,7 +261,7 @@ def show(df, epci_df):
             range_color=range_color,
             scope="europe",
             center={"lat": 46.8, "lon": -2.3},
-            title=f"{selected_indicateur} à l'échelle EPCI pour la date {selected_date_str}<br><sub>{range_note}</sub>",
+            title=f"{selected_indicateur} à l'échelle EPCI pour la date {selected_date_str}<br><sub>{range_note}</sub>{source_text}",
             subtitle="unité = unité")
     
     fig.update_geos(fitbounds="locations", visible=False)
@@ -226,6 +270,7 @@ def show(df, epci_df):
     
     # Afficher un résumé des statistiques
     if len(filtered_df) > 0:
+        # NE PAS utiliser key dans st.expander() si votre version ne le supporte pas
         with st.expander("📈 Statistiques descriptives"):
             col_stat1, col_stat2, col_stat3 = st.columns(3)
             with col_stat1:
@@ -244,5 +289,4 @@ def show(df, epci_df):
     
     display_df['date'] = display_df['date'].dt.strftime('%d/%m/%Y')
     
-    st.dataframe(display_df, use_container_width=True)
-    
+    st.dataframe(display_df, use_container_width=True, key="carte_dataframe")
