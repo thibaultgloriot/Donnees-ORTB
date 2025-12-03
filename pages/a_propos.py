@@ -25,6 +25,7 @@ def show():
     Pour toute question ou suggestion :
     - Email : ortb@i-carre.net
     - Tél : 06 59 61 63 54
+    - Site Internet de l'ORTB : www.observatoire-transports-bretagne.fr
     
     ### Version
     Version 1.0 - Décembre 2025
@@ -49,4 +50,5 @@ def show():
         - **Visualisation** : Plotly, Pandas
         - **Cartes** : GeoJSON, IGN data
         - **Hébergement** : Streamlit Cloud
+
         """)
