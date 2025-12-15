@@ -5,15 +5,17 @@ def show(df, epci_df):
     st.title("🏠 Tableau de bord - Observatoire Régional")
     
     # KPI globaux
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3,col4 = st.columns(4)
     
     with col1:
-        st.metric("Nombre d'indicateurs", df['indicateur'].nunique())
-    
+        st.metric("Nombre d'indicateurs à l'échelle commune", df['indicateur'].nunique())
     with col2:
-        st.metric("Nombre de communes", df['code_commune'].nunique())
+        st.metric("Nombre d'indicateurs à l'échelle EPCI", df_epci['indicateur'].nunique())
     
     with col3:
+        st.metric("Nombre de communes", df['code_commune'].nunique())
+    
+    with col4:
         if epci_df is not None:
             st.metric("Nombre d'EPCI", 61)
         else:
@@ -22,14 +24,15 @@ def show(df, epci_df):
     # Liste des indicateurs disponibles
     st.subheader("📋 Indicateurs disponibles")
     
-    if 'thematique' in df.columns:
-        for thematique in df['thematique'].unique():
+    if 'thematique' in epci_df.columns:
+        for thematique in epci_df['thematique'].unique():
             with st.expander(f"{thematique}"):
-                indicateurs = df[df['thematique'] == thematique]['indicateur'].unique()
+                indicateurs = epci_df[epci_df['thematique'] == thematique]['indicateur'].unique()
                 for ind in indicateurs:
                     st.write(f"• {ind}")
     else:
-        for ind in sorted(df['indicateur'].unique()):
+        for ind in sorted(epci_df['indicateur'].unique()):
 
             st.write(f"• {ind}")
+
 
