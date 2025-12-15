@@ -6,9 +6,9 @@ def show():
     st.title("ℹ️ À propos")
     
     st.write("""
-    ## Plateforme de visualisation des données de l'ORTB
+    ## Observatoire de la Planification Ecologique en Bretagne
     
-    Cette application permet de visualiser et d'explorer les indicateurs territoriaux
+    Cet outil permet de visualiser et d'explorer les indicateurs territoriaux de la planification écologique
     à différentes échelles géographiques (communes et EPCI).
     
     ### Fonctionnalités principales
@@ -23,9 +23,8 @@ def show():
     
     ### Contact
     Pour toute question ou suggestion :
-    - Email : ortb@i-carre.net
+    - Email : thibault.gloriot@developpement-durable.gouve.fr ou cpros.coprev.dreal-bretagne@developpement-durable.gouv.fr
     - Tél : 06 59 61 63 54
-    - Site Internet de l'ORTB : www.observatoire-transports-bretagne.fr
     
     ### Version
     Version 1.0 - Décembre 2025
@@ -38,7 +37,7 @@ def show():
     with col1:
         st.subheader("📚 Documentation")
         st.write("""
-        - [Fichier Grist du projet](https://grist.numerique.gouv.fr/o/docs/1yHHubK9LQYf/Donnees-Transport-ORTB?utm_id=share-doc)
+        - [Fichier Grist du projet](https://grist.numerique.gouv.fr/o/docs/56VbbinHJQEo/IndicateursPlanificationEcologique?utm_id=share-doc)
         - [Guide d'utilisation]()
         - [Données publiées sur GéoBretagne]()
         """)
@@ -52,3 +51,4 @@ def show():
         - **Hébergement** : Streamlit Cloud
 
         """)
+
