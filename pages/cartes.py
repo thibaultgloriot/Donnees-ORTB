@@ -48,12 +48,34 @@ def get_scale_options(df, column):
     
     return linear_scale, percentile_scale, std_scale
 
+def get_common_themes(df, epci_df):
+    """Récupère les thématiques communes entre les deux échelles"""
+    themes_communes = set()
+    themes_epci = set()
+    
+    if df is not None and 'thematique' in df.columns:
+        themes_communes = set(df['thematique'].dropna().unique())
+    
+    if epci_df is not None and 'thematique' in epci_df.columns:
+        themes_epci = set(epci_df['thematique'].dropna().unique())
+    
+    # Retourne les thématiques communes et celles spécifiques à chaque échelle
+    themes_communs = themes_communes.intersection(themes_epci)
+    
+    # Si pas de thématiques communes, on utilise celles de l'échelle sélectionnée
+    if not themes_communs:
+        return sorted(themes_communes) if themes_communes else sorted(themes_epci)
+    
+    return sorted(themes_communs)
+
 def show(df, epci_df):
     # Charger les sources des indicateurs
     indicator_sources = load_indicator_sources()
     
-    st.title("📊 Visualisation Cartographique des indicateurs de l'ORTB")
-    thematiques = sorted(df['thematique'].unique()) if 'thematique' in df.columns else ['Tous']
+    st.title("📊 Visualisation Cartographique des indicateurs de la Planification Ecologique")
+    
+    # Obtenir les thématiques communes
+    common_themes = get_common_themes(df, epci_df)
     
     col1, col2, col3, col4 = st.columns([1, 0.7, 1.5, 0.6])
     
@@ -62,59 +84,66 @@ def show(df, epci_df):
             "Échelle géographique",
             options=["Commune", "EPCI"],
             horizontal=True,
-            key="carte_radio_echelle"  # Clé unique
+            key="carte_radio_echelle"
         )
     
     with col2:
-        if len(thematiques) > 1:
+        if len(common_themes) > 0:
             selected_thematique = st.selectbox(
                 "Thématique", 
-                ["Toutes"] + list(thematiques),
-                key="carte_select_thematique"  # Clé unique
+                ["Toutes"] + list(common_themes),
+                key="carte_select_thematique"
             )
         else:
             selected_thematique = "Toutes"
+            st.info("Aucune thématique disponible")
     
     with col3:
-        # Filtrer d'abord par thématique si nécessaire
-        if selected_thematique != "Toutes" and 'thematique' in df.columns:
-            if echelle == "Commune":
-                indicateurs = df[df['thematique'] == selected_thematique]['indicateur'].unique()
-            else:
-                indicateurs = epci_df[epci_df['thematique'] == selected_thematique]['indicateur'].unique()
+        # Filtrer les indicateurs en fonction de l'échelle et de la thématique
+        if echelle == "Commune":
+            df_to_use = df
         else:
-            if echelle == "Commune":
-                indicateurs = df['indicateur'].unique()
-            else:
-                indicateurs = epci_df['indicateur'].unique() if epci_df is not None else []
+            df_to_use = epci_df if epci_df is not None else pd.DataFrame()
+        
+        # Filtrer par thématique si nécessaire
+        if selected_thematique != "Toutes" and 'thematique' in df_to_use.columns:
+            filtered_df = df_to_use[df_to_use['thematique'] == selected_thematique]
+            indicateurs = filtered_df['indicateur'].unique()
+        else:
+            indicateurs = df_to_use['indicateur'].unique() if not df_to_use.empty else []
         
         selected_indicateur = st.selectbox(
             "Indicateur", 
-            indicateurs,
-            key="carte_select_indicateur"  # Clé unique
+            indicateurs if len(indicateurs) > 0 else ["Aucun indicateur disponible"],
+            key="carte_select_indicateur"
         )
     
     with col4:
+        # Gérer les dates disponibles
         if echelle == "Commune":
-            dates_disponibles = sorted(df[df['indicateur'] == selected_indicateur]['date'].unique())
+            df_to_use = df
         else:
-            if epci_df is not None:
-                dates_disponibles = sorted(epci_df[epci_df['indicateur'] == selected_indicateur]['date'].unique())
-            else:
-                dates_disponibles = sorted(df[df['indicateur'] == selected_indicateur]['date'].unique())
+            df_to_use = epci_df if epci_df is not None else df
         
-        dates_options = [date.strftime('%d/%m/%Y') for date in dates_disponibles]
-        
-        if dates_options:
-            selected_date_str = st.selectbox(
-                "Sélectionnez la date",
-                options=dates_options,
-                index=len(dates_options)-1,
-                key="carte_select_date"  # Clé unique
+        if not df_to_use.empty and selected_indicateur != "Aucun indicateur disponible":
+            dates_disponibles = sorted(
+                df_to_use[df_to_use['indicateur'] == selected_indicateur]['date'].unique()
             )
-            selected_date = datetime.strptime(selected_date_str, '%d/%m/%Y')
+            
+            if len(dates_disponibles) > 0:
+                dates_options = [date.strftime('%d/%m/%Y') for date in dates_disponibles]
+                selected_date_str = st.selectbox(
+                    "Sélectionnez la date",
+                    options=dates_options,
+                    index=len(dates_options)-1,
+                    key="carte_select_date"
+                )
+                selected_date = datetime.strptime(selected_date_str, '%d/%m/%Y')
+            else:
+                st.warning("Aucune date disponible pour cet indicateur")
+                return
         else:
-            st.warning("Aucune date disponible pour cet indicateur")
+            st.warning("Veuillez sélectionner un indicateur")
             return
     
     # Nouvelle section pour les options d'échelle
@@ -122,15 +151,13 @@ def show(df, epci_df):
     col_scale1, col_scale2, col_scale3 = st.columns(3)
     
     with col_scale1:
-        # Options d'échelle de couleur
         scale_options = st.selectbox(
             "Échelle de couleur",
-            options=["Blues","Greens","Darkmint","ice"],
-            key="carte_select_scale"  # Clé unique
+            options=["Blues", "Greens", "Darkmint", "ice", "Viridis", "Plasma"],
+            key="carte_select_scale"
         )
     
     with col_scale2:
-        # Options de répartition statistique
         stat_scale = st.selectbox(
             "Répartition statistique",
             options=[
@@ -138,21 +165,20 @@ def show(df, epci_df):
                 "Percentiles (5-95%)", 
                 "Moyenne ± 2 écarts-types"
             ],
-            key="carte_select_stat_scale"  # Clé unique
+            key="carte_select_stat_scale"
         )
     
     with col_scale3:
-        # Option pour inverser l'échelle de couleur
         reverse_scale = st.checkbox(
             "Inverser l'échelle de couleur",
-            key="carte_checkbox_reverse"  # Clé unique
+            key="carte_checkbox_reverse"
         )
     
     # Filtrage des données selon l'échelle
     if echelle == "Commune":
         filtered_df = df[
             (df['indicateur'] == selected_indicateur) & 
-            (df['date'] == selected_date)]
+            (df['date'] == selected_date)].copy()
         
         # Calcul des échelles statistiques
         if len(filtered_df) > 0:
@@ -177,7 +203,7 @@ def show(df, epci_df):
         
         # Inverser l'échelle si demandé
         color_scale = scale_options
-        if reverse_scale and scale_options not in ["Rainbow"]:
+        if reverse_scale:
             color_scale = color_scale + "_r"
         
         # Récupérer le GeoJSON
@@ -235,7 +261,7 @@ def show(df, epci_df):
         
         # Inverser l'échelle si demandé
         color_scale = scale_options
-        if reverse_scale and scale_options not in ["Rainbow"]:
+        if reverse_scale:
             color_scale = color_scale + "_r"
         
         # Récupérer le GeoJSON
@@ -269,7 +295,6 @@ def show(df, epci_df):
     
     # Afficher un résumé des statistiques
     if len(filtered_df) > 0:
-        # NE PAS utiliser key dans st.expander() si votre version ne le supporte pas
         with st.expander("📈 Statistiques descriptives"):
             col_stat1, col_stat2, col_stat3 = st.columns(3)
             with col_stat1:
@@ -289,6 +314,3 @@ def show(df, epci_df):
     display_df['date'] = display_df['date'].dt.strftime('%d/%m/%Y')
     
     st.dataframe(display_df, use_container_width=True, key="carte_dataframe")
-
-
-
