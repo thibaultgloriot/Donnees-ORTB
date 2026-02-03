@@ -8,13 +8,13 @@ import os
 
 # Configuration de la page
 st.set_page_config(
-    page_title="Plateforme de visualisation des données de l'ORTB",
+    page_title="Observatoire de la Planification Ecologique en Bretagne",
     page_icon="🗺️",
     layout="wide",
     initial_sidebar_state="expanded")
 
 # Chargement du logo
-logo = Image.open('assets/logo.jpg')
+logo = Image.open('assets/logo.png')
 
 # Chargement des données
 @st.cache_data
@@ -122,7 +122,7 @@ with st.sidebar:
     st.subheader("📊 Informations")
     
     if df is not None and not df.empty:
-        st.caption(f"Données mises à jour le: {df['date'].max().strftime('%d/%m/%Y')}")
+        st.caption(f"Données mises à jour le: 15/12/2025")
         st.caption(f"Indicateurs communaux: {df['indicateur'].nunique()}")
     
     if epci_df is not None and not epci_df.empty:
@@ -179,4 +179,5 @@ if selected_module:
             st.write("Cette page est en cours de développement.")
 else:
     st.error("Page non trouvée")
+
 
