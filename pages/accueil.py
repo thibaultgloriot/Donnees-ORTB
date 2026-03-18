@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 
 def show(df, epci_df):
-    st.title("🏠 Tableau de bord - Observatoire Régional de la Planification Ecologique")
+    st.title("🏠 Plateforme de visualisation des données de l'ORTB")
     
     # KPI globaux
     col1, col2, col3, col4 = st.columns(4)
