@@ -432,7 +432,7 @@ def show(df, epci_df):
     # Charger les sources et les groupes
     indicator_sources, groups_dict, indicator_to_group = load_indicator_sources_and_groups()
     
-    st.title("📊 Visualisation Cartographique des indicateurs de la Planification Ecologique")
+    st.title("📊 Visualisation Cartographique des indicateurs de l'ORTB")
     
     common_themes = get_common_themes(df, epci_df)
     
