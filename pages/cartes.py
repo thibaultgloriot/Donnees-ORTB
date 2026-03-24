@@ -12,7 +12,7 @@ from collections import defaultdict
 # ============================================================================
 
 # Nombre de décimales pour l'affichage des valeurs
-PRECISION_DECIMALES = 2  # Modifiez cette valeur (0, 1, 2, 3, etc.)
+PRECISION_DECIMALES = 1  # Modifiez cette valeur (0, 1, 2, 3, etc.)
 
 # Seuil pour considérer qu'une somme est égale à 100 (pour les pourcentages)
 SEUIL_CENT = 0.01  # Si |somme - 100| < seuil, on considère que c'est 100
@@ -229,27 +229,6 @@ def normalize_by_population(df, code_col, population_df):
     df_normalized['valeur_normalisee'] = df_normalized['valeur'] / df_normalized['population_milliers']
     return df_normalized
 
-def calculate_evolution(df_courant, df_reference, valeur_colonne):
-    """Calcule l'évolution entre deux périodes"""
-    if df_reference is None or df_reference.empty:
-        return df_courant.copy()
-    
-    # Fusionner les deux DataFrames
-    evolution_df = df_courant.merge(
-        df_reference[['code_commune' if 'code_commune' in df_reference.columns else 'code_epci', 
-                      valeur_colonne]].rename(columns={valeur_colonne: 'valeur_reference'}),
-        on='code_commune' if 'code_commune' in df_courant.columns else 'code_epci',
-        how='left'
-    )
-    
-    # Calculer l'évolution (en pourcentage)
-    evolution_df['valeur_evolution'] = (evolution_df[valeur_colonne] - evolution_df['valeur_reference']) 
-    
-    # Remplacer les valeurs infinies par NaN
-    evolution_df['valeur_evolution'] = evolution_df['valeur_evolution'].replace([np.inf, -np.inf], np.nan)
-    
-    return evolution_df
-
 def get_scale_options(df, column):
     """Calcule les différentes échelles de représentation"""
     values = df[column].dropna()
@@ -453,7 +432,7 @@ def show(df, epci_df):
     # Charger les sources et les groupes
     indicator_sources, groups_dict, indicator_to_group = load_indicator_sources_and_groups()
     
-    st.title("📊 Visualisation Cartographique des indicateurs de l'ORTB")
+    st.title("📊 Visualisation Cartographique des indicateurs de la Planification Ecologique")
     
     common_themes = get_common_themes(df, epci_df)
     
@@ -528,50 +507,13 @@ def show(df, epci_df):
                 st.warning("⚠️ Veuillez sélectionner au moins une valeur")
                 return
     
-    # Normalisation, évolution et couleurs
+    # Normalisation et couleurs
     st.markdown("---")
-    
-    # Vérifier si plusieurs dates sont disponibles pour l'évolution
-    plusieurs_dates = len(dates_disponibles) > 1
-    
-    col_norm, col_evo, col_scale1, col_scale2 = st.columns([0.5, 0.4, 0.5, 0.5])
+    col_norm, col_scale1, col_scale2 = st.columns([0.7, 0.5, 0.5])
     
     with col_norm:
         normalisation_option = st.selectbox("Normalisation", 
                                           ["Aucune", "Par surface", "Par population"])
-    
-    with col_evo:
-        if plusieurs_dates:
-            evolution_option = st.selectbox(
-                "Évolution",
-                ["Aucune", "Par rapport à l'année précédente", "Par rapport à une année spécifique"]
-            )
-            
-            if evolution_option == "Par rapport à une année spécifique":
-                # Filtrer les dates autres que la date sélectionnée
-                autres_dates = [d for d in dates_disponibles if d != selected_date]
-                date_reference_str = st.selectbox(
-                    "Année de référence",
-                    [d.strftime('%d/%m/%Y') for d in autres_dates],
-                    index=len(autres_dates)-1 if autres_dates else 0,
-                    key="date_reference"
-                )
-                date_reference = datetime.strptime(date_reference_str, '%d/%m/%Y')
-            elif evolution_option == "Par rapport à l'année précédente":
-                # Trouver l'année précédente (la plus proche avant la date sélectionnée)
-                dates_anterieures = [d for d in dates_disponibles if d < selected_date]
-                if dates_anterieures:
-                    date_reference = max(dates_anterieures)
-                else:
-                    st.warning("Pas d'année précédente disponible")
-                    evolution_option = "Aucune"
-                    date_reference = None
-            else:
-                date_reference = None
-        else:
-            evolution_option = "Aucune"
-            date_reference = None
-            st.caption("Évolution non disponible (une seule date)")
     
     with col_scale1:
         scale_options = st.selectbox("Palette", ["Blues", "Greens", "Darkmint", "ice", "Reds"])
@@ -588,7 +530,7 @@ def show(df, epci_df):
         surface_df, population_df = get_surface_population_data(epci_df, "EPCI", selected_date)
         code_col = 'code_epci'
     
-    # Récupération des données pour la date courante
+    # Récupération des données
     if selected_indicator_info['type'] == 'individuel':
         if echelle == "Commune":
             filtered_df = df[(df['indicateur'] == selected_indicator_info['indicateur_nom']) & 
@@ -660,37 +602,8 @@ def show(df, epci_df):
         titre_indicateur = f"📊 {selected_indicator_info['groupe_nom']}"
         source_key = None
     
-    # Récupération des données pour la date de référence (si évolution)
-    if evolution_option != "Aucune" and date_reference is not None:
-        if selected_indicator_info['type'] == 'individuel':
-            if echelle == "Commune":
-                reference_df = df[(df['indicateur'] == selected_indicator_info['indicateur_nom']) & 
-                                 (df['date'] == date_reference)].copy()
-            else:
-                reference_df = epci_df[(epci_df['indicateur'] == selected_indicator_info['indicateur_nom']) & 
-                                      (epci_df['date'] == date_reference)].copy()
-        else:
-            reference_df = get_group_data(
-                df_to_use if echelle == "Commune" else epci_df,
-                selected_indicator_info,
-                selected_indicators_for_group,
-                code_col,
-                date_reference,
-                norm_option_for_group,
-                surface_df,
-                population_df
-            )
-        
-        # Calculer l'évolution
-        if reference_df is not None and not reference_df.empty:
-            evolution_df = calculate_evolution(filtered_df, reference_df, valeur_colonne)
-            filtered_df = evolution_df
-            valeur_colonne = 'valeur_evolution'
-            suffixe_titre = " (%)"
-            titre_indicateur = f"Évolution de {titre_indicateur}"
-    
     # Échelle de couleurs - s'assurer que 100 est bien inclus
-    if valeur_colonne in filtered_df.columns and valeur_colonne != 'valeur_evolution':
+    if valeur_colonne in filtered_df.columns:
         # Si on a des valeurs très proches de 100, s'assurer que l'échelle va jusqu'à 100
         max_val = filtered_df[valeur_colonne].max()
         if abs(max_val - 100) < SEUIL_CENT:
@@ -726,12 +639,6 @@ def show(df, epci_df):
         if source_key and source_key in indicator_sources and pd.notna(indicator_sources[source_key]):
             source_text = f"<br><sub>Source : {indicator_sources[source_key]}</sub>"
         
-        # Ajouter la date de référence dans le titre si évolution
-        if evolution_option != "Aucune" and date_reference is not None:
-            titre_complet = f"{titre_indicateur}{suffixe_titre} entre {date_reference.strftime('%d/%m/%Y')} et {selected_date_str}"
-        else:
-            titre_complet = f"{titre_indicateur}{suffixe_titre} au {selected_date_str}"
-        
         fig = px.choropleth(
             filtered_df,
             geojson=communes_geojson,
@@ -744,7 +651,7 @@ def show(df, epci_df):
             range_color=range_color,
             scope="europe",
             center={"lat": 46.8, "lon": -2.3},
-            title=f"{titre_complet}<br><sub>{range_note}</sub>{source_text}")
+            title=f"{titre_indicateur}{suffixe_titre}<br><sub>{range_note}</sub>{source_text}")
         
     else:
         epci_geojson = load_geojson("data/epci_simple.geojson")
@@ -752,12 +659,6 @@ def show(df, epci_df):
         source_text = ""
         if source_key and source_key in indicator_sources and pd.notna(indicator_sources[source_key]):
             source_text = f"<br><sub>Source : {indicator_sources[source_key]}</sub>"
-        
-        # Ajouter la date de référence dans le titre si évolution
-        if evolution_option != "Aucune" and date_reference is not None:
-            titre_complet = f"{titre_indicateur}{suffixe_titre} entre {date_reference.strftime('%d/%m/%Y')} et {selected_date_str}"
-        else:
-            titre_complet = f"{titre_indicateur}{suffixe_titre} au {selected_date_str}"
         
         fig = px.choropleth(
             filtered_df,
@@ -771,7 +672,7 @@ def show(df, epci_df):
             range_color=range_color,
             scope="europe",
             center={"lat": 46.8, "lon": -2.3},
-            title=f"{titre_complet}<br><sub>{range_note}</sub>{source_text}")
+            title=f"{titre_indicateur}{suffixe_titre}<br><sub>{range_note}</sub>{source_text}")
     
     fig.update_geos(fitbounds="locations", visible=False)
     fig.update_layout(width=1000, height=1000, margin=dict(l=0, r=0, t=50, b=0))
@@ -783,26 +684,16 @@ def show(df, epci_df):
         with col_stat1:
             # Pour la moyenne, on peut aussi arrondir les valeurs proches de 100
             mean_val = filtered_df[valeur_colonne].mean()
-            if not np.isnan(mean_val):
-                if abs(mean_val - 100) < SEUIL_CENT and valeur_colonne != 'valeur_evolution':
-                    mean_val = 100.0
-                st.metric("Moyenne", format_str.format(mean_val))
-            else:
-                st.metric("Moyenne", "N/A")
+            if abs(mean_val - 100) < SEUIL_CENT:
+                mean_val = 100.0
+            st.metric("Moyenne", format_str.format(mean_val))
         with col_stat2:
             median_val = filtered_df[valeur_colonne].median()
-            if not np.isnan(median_val):
-                if abs(median_val - 100) < SEUIL_CENT and valeur_colonne != 'valeur_evolution':
-                    median_val = 100.0
-                st.metric("Médiane", format_str.format(median_val))
-            else:
-                st.metric("Médiane", "N/A")
+            if abs(median_val - 100) < SEUIL_CENT:
+                median_val = 100.0
+            st.metric("Médiane", format_str.format(median_val))
         with col_stat3:
-            std_val = filtered_df[valeur_colonne].std()
-            if not np.isnan(std_val):
-                st.metric("Écart-type", format_str.format(std_val))
-            else:
-                st.metric("Écart-type", "N/A")
+            st.metric("Écart-type", format_str.format(filtered_df[valeur_colonne].std()))
     
     # Données détaillées avec la précision configurée
     with st.expander("📋 Données détaillées"):
@@ -814,12 +705,11 @@ def show(df, epci_df):
         display_cols = [col for col in display_cols if col in filtered_df.columns]
         display_df = filtered_df[display_cols].copy()
         
-        # Arrondir les valeurs et corriger celles proches de 100 (sauf pour l'évolution)
+        # Arrondir les valeurs et corriger celles proches de 100
         if valeur_colonne in display_df.columns:
-            if valeur_colonne != 'valeur_evolution':
-                # Corriger les valeurs proches de 100
-                mask_proche_100 = (display_df[valeur_colonne] - 100).abs() < SEUIL_CENT
-                display_df.loc[mask_proche_100, valeur_colonne] = 100.0
+            # Corriger les valeurs proches de 100
+            mask_proche_100 = (display_df[valeur_colonne] - 100).abs() < SEUIL_CENT
+            display_df.loc[mask_proche_100, valeur_colonne] = 100.0
             # Arrondir
             display_df[valeur_colonne] = display_df[valeur_colonne].round(PRECISION_DECIMALES)
         
@@ -830,12 +720,10 @@ def show(df, epci_df):
                 display_df.rename(columns={'valeur_normalisee': f'Valeur (pour 1000 hab.)'}, inplace=True)
         elif valeur_colonne == 'valeur':
             display_df.rename(columns={'valeur': 'Valeur'}, inplace=True)
-        elif valeur_colonne == 'valeur_evolution':
-            display_df.rename(columns={'valeur_evolution': f'Évolution (%)'}, inplace=True)
         
         st.dataframe(display_df, use_container_width=True, hide_index=True)
         
-        if selected_indicator_info['type'] == 'groupe' and 'valeur_evolution' not in valeur_colonne:
+        if selected_indicator_info['type'] == 'groupe':
             selected_values = [indicator_to_group[ind].get('specific_value', '?') 
                              for ind in selected_indicators_for_group if ind in indicator_to_group]
             st.caption(f"Valeurs sélectionnées : {', '.join(selected_values)}")
