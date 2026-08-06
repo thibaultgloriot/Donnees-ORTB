@@ -26,7 +26,7 @@ def show():
     - Site Internet de l'ORTB : www.observatoire-transports-bretagne.fr
     
     ### Version
-    Version 1.0 - Décembre 2025
+    Version 2.0 - Août 2026
     """)
     
     st.divider()
