@@ -7,7 +7,13 @@ def show():
     ## Plateforme de visualisation des données de l'ORTB
     
     Cette application permet de visualiser et d'explorer les indicateurs territoriaux
-    à différentes échelles géographiques (communes et EPCI).
+    à différentes échelles géographiques (communes et EPCI)
+    
+    ### Échelles disponibles
+    - 🏘️ **Communes** : Données à l'échelle communale
+    - 🏙️ **EPCI** : Données à l'échelle des intercommunalités
+    - 📍 **Départements** : Données à l'échelle départementale
+    - 🌍 **Régions** : Données à l'échelle régionale.
     
     ### Fonctionnalités principales
     - 📍 Visualisation cartographique des indicateurs

@@ -17,27 +17,38 @@ logo = Image.open('assets/logo.jpg')
 
 # Chargement des données
 @st.cache_data
-def load_data():
-    df = pd.read_csv('data/final_df_communes.csv')
-    df['date'] = pd.to_datetime(df['date'], format='%d/%m/%Y', errors='coerce')
-    df['code_commune'] = df['code_commune'].astype(str)
-    df = df.dropna(subset=['date'])
-    if 'valeur' in df.columns:
-        df['valeur'] = pd.to_numeric(df['valeur'], errors='coerce')
-    return df
+def load_data(filepath, code_col, libelle_col):
+    """Charge un fichier de données avec les colonnes standardisées"""
+    try:
+        df = pd.read_csv(filepath)
+        df['date'] = pd.to_datetime(df['date'], format='%d/%m/%Y', errors='coerce')
+        df[code_col] = df[code_col].astype(str)
+        df = df.dropna(subset=['date'])
+        if 'valeur' in df.columns:
+            df['valeur'] = pd.to_numeric(df['valeur'], errors='coerce')
+        return df
+    except Exception as e:
+        st.warning(f"Impossible de charger {filepath}: {e}")
+        return None
 
 @st.cache_data
-def load_epci_data():
-    try:
-        epci_df = pd.read_csv('data/final_df_epci.csv')
-        epci_df.rename(columns={'nom':'libelle_epci'}, inplace=True)
-        epci_df['date'] = pd.to_datetime(epci_df['date'], format='%d/%m/%Y', errors='coerce')
-        epci_df['code_epci'] = epci_df['code_epci'].astype(str)
-        if 'valeur' in epci_df.columns:
-            epci_df['valeur'] = pd.to_numeric(epci_df['valeur'], errors='coerce')
-        return epci_df
-    except FileNotFoundError:
-        return None
+def load_all_data():
+    """Charge toutes les données (communes, EPCI, départements, régions)"""
+    data = {}
+    
+    # Charger les communes
+    data['communes'] = load_data('data/final_df_communes.csv', 'code_commune', 'libelle_commune')
+    
+    # Charger les EPCI
+    data['epci'] = load_data('data/final_df_epci.csv', 'code_epci', 'libelle_epci')
+    
+    # Charger les départements
+    data['departements'] = load_data('data/final_df_departement.csv', 'code_departement', 'libelle_departement')
+    
+    # Charger les régions
+    data['regions'] = load_data('data/final_df_region.csv', 'code_region', 'libelle_region')
+    
+    return data
 
 # Chargement du mapping
 @st.cache_data
@@ -49,8 +60,7 @@ def load_mapping():
         return None
 
 # Charger les données
-df = load_data()
-epci_df = load_epci_data()
+data = load_all_data()
 mapping_df = load_mapping()
 
 # Ajouter les thématiques
@@ -85,10 +95,10 @@ def add_thematique_column(df, mapping_df):
     
     return df
 
-# Appliquer les thématiques
-df = add_thematique_column(df, mapping_df)
-if epci_df is not None:
-    epci_df = add_thematique_column(epci_df, mapping_df)
+# Appliquer les thématiques à toutes les données
+for key in data:
+    if data[key] is not None:
+        data[key] = add_thematique_column(data[key], mapping_df)
 
 # Navigation
 available_pages = []
@@ -120,12 +130,17 @@ with st.sidebar:
     st.divider()
     st.subheader("📊 Informations")
     
-    if df is not None and not df.empty:
-        st.caption(f"Données mises à jour le: 06/08/2026")
-        st.caption(f"Indicateurs communaux: {df['indicateur'].nunique()}")
+    # Afficher les informations pour chaque échelle
+    echelles = {
+        'communes': 'Communes',
+        'epci': 'EPCI',
+        'departements': 'Départements',
+        'regions': 'Régions'
+    }
     
-    if epci_df is not None and not epci_df.empty:
-        st.caption(f"Indicateurs EPCI: {epci_df['indicateur'].nunique()}")
+    for key, label in echelles.items():
+        if data.get(key) is not None and not data[key].empty:
+            st.caption(f"{label}: {data[key]['indicateur'].nunique()} indicateurs")
 
 # Charger la page sélectionnée
 selected_module = None
@@ -139,21 +154,18 @@ if selected_module:
         module = importlib.import_module(f"pages.{selected_module}")
         
         if selected_module == "accueil":
-            module.show(df, epci_df)
+            module.show(data)
         elif selected_module == "cartes":
-            module.show(df, epci_df)
+            module.show(data)
         elif selected_module == "donnees_brutes":
-            module.show(df, epci_df)
+            module.show(data)
         elif selected_module == "a_propos":
             module.show()
         else:
             try:
-                module.show(df, epci_df)
+                module.show(data)
             except:
-                try:
-                    module.show(df)
-                except:
-                    module.show()
+                module.show()
                     
     except Exception as e:
         st.error(f"Erreur lors du chargement de la page: {e}")

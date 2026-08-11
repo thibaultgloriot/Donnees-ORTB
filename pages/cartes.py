@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import json
 import plotly.express as px
+import plotly.graph_objects as go
 from datetime import datetime
 import numpy as np
 import re
@@ -11,8 +12,52 @@ from collections import defaultdict
 # PARAMÈTRES DE CONFIGURATION
 # ============================================================================
 
-PRECISION_DECIMALES = 1
+PRECISION_DECIMALES = 3
 SEUIL_CENT = 0.01
+MAX_TERRITOIRES_COMPARAISON = 15  # Nombre max de territoires à comparer
+
+# ============================================================================
+# CONFIGURATION DES ÉCHELLES
+# ============================================================================
+
+ECHELLES_CONFIG = {
+    'communes': {
+        'label': 'Commune',
+        'code_col': 'code_commune',
+        'libelle_col': 'libelle_commune',
+        'geojson': 'data/communes_simple.geojson',
+        'center': {"lat": 46.8, "lon": -2.3},
+        'parent_col': 'code_departement',
+        'parent_libelle_col': 'libelle_departement',
+        'grandparent_col': 'code_region',
+        'grandparent_libelle_col': 'libelle_region'
+    },
+    'epci': {
+        'label': 'EPCI',
+        'code_col': 'code_epci',
+        'libelle_col': 'libelle_epci',
+        'geojson': 'data/epci_simple.geojson',
+        'center': {"lat": 46.8, "lon": -2.3},
+        'parent_col': 'code_departement',
+        'parent_libelle_col': 'libelle_departement',
+        'grandparent_col': 'code_region',
+        'grandparent_libelle_col': 'libelle_region'
+    },
+    'departements': {
+        'label': 'Département',
+        'code_col': 'code_departement',
+        'libelle_col': 'libelle_departement',
+        'geojson': 'data/departements-bretagne.geojson',
+        'center': {"lat": 46.8, "lon": -2.3}
+    },
+    'regions': {
+        'label': 'Région',
+        'code_col': 'code_region',
+        'libelle_col': 'libelle_region',
+        'geojson': 'data/region-bretagne.geojson',
+        'center': {"lat": 46.8, "lon": -2.3}
+    }
+}
 
 # ============================================================================
 # FONCTIONS DE CHARGEMENT DES DONNÉES
@@ -52,7 +97,6 @@ def load_indicator_sources_and_groups():
         # Descriptions
         descriptions_dict = {}
         if 'Description' in sources_df.columns:
-            # Ne garder que les descriptions non nulles et non vides
             desc_df = sources_df[sources_df['Description'].notna() & (sources_df['Description'] != '')]
             descriptions_dict = dict(zip(desc_df[indicator_col], desc_df['Description']))
         
@@ -61,14 +105,13 @@ def load_indicator_sources_and_groups():
         indicator_to_group = {}
         group_names = load_group_names()
         
-        # Traitement des thématiques multiples - OPTIMISÉ
+        # Traitement des thématiques multiples
         thematiques_dict = {}
         if 'Thématique' in sources_df.columns:
             for _, row in sources_df.iterrows():
                 if pd.notna(row['Thématique']) and row['Thématique'] != '':
-                    # Split par ; et nettoyer
                     themes = [t.strip() for t in str(row['Thématique']).split(';') if t.strip()]
-                    if themes:  # Ne garder que si la liste n'est pas vide
+                    if themes:
                         thematiques_dict[row[indicator_col]] = themes
         
         if 'Groupe' in sources_df.columns:
@@ -159,17 +202,14 @@ def load_menages_data():
         menages_df['date'] = pd.to_datetime(menages_df['date'], format='%d/%m/%Y', errors='coerce')
         menages_df['code_commune'] = menages_df['code_commune'].astype(str)
         
-        # Filtrer les indicateurs de ménages
         menages_indicateurs = menages_df[menages_df['indicateur'].str.contains('ménages', case=False)]
         
         if menages_indicateurs.empty:
             return None, None
         
-        # Créer un mapping année -> date
         menages_df_filtered = menages_indicateurs[['date', 'code_commune', 'valeur']].copy()
         menages_df_filtered['annee'] = menages_df_filtered['date'].dt.year
         
-        # Garder une valeur par année pour chaque commune
         menages_by_year = menages_df_filtered.groupby(['code_commune', 'annee'])['valeur'].mean().reset_index()
         
         return menages_by_year, menages_df_filtered
@@ -184,11 +224,8 @@ def get_menages_for_date(menages_data, code, date_reference):
         return None, None
     
     annee = date_reference.year
-    
-    # Années disponibles
     annees_disponibles = [2012, 2017, 2023]
     
-    # Trouver l'année la plus proche (précédente)
     annee_utilisee = None
     for a in sorted(annees_disponibles):
         if a <= annee:
@@ -197,7 +234,6 @@ def get_menages_for_date(menages_data, code, date_reference):
     if annee_utilisee is None:
         annee_utilisee = annees_disponibles[0]
     
-    # Filtrer les données
     menage_row = menages_data[(menages_data['code_commune'] == code) & 
                               (menages_data['annee'] == annee_utilisee)]
     
@@ -214,7 +250,6 @@ def normalize_by_menages(df, code_col, date_col, menages_data):
     df_normalized = df.copy()
     menages_notes = []
     
-    # Récupérer les ménages pour chaque ligne
     menages_values = []
     for idx, row in df_normalized.iterrows():
         code = str(row[code_col])
@@ -241,18 +276,15 @@ def get_surface_population_data(df, echelle, date_reference):
     population_df = None
     
     if df is not None and not df.empty:
-        # Surface (valeur unique - la plus récente)
         surface_data = df[df['indicateur'] == "Surface totale du territoire (ha)"].copy()
         if not surface_data.empty:
-            surface_df = surface_data.sort_values('date').groupby(
-                ['code_commune'] if echelle == "Commune" else ['code_epci']
-            ).last().reset_index()
+            code_col = ECHELLES_CONFIG[echelle]['code_col']
+            surface_df = surface_data.sort_values('date').groupby([code_col]).last().reset_index()
         
-        # Population (valeur la plus proche de la date de référence)
         population_data = df[df['indicateur'] == "Nombre d'habitants du territoire"].copy()
         if not population_data.empty:
             population_dfs = []
-            code_col = 'code_commune' if echelle == "Commune" else 'code_epci'
+            code_col = ECHELLES_CONFIG[echelle]['code_col']
             
             for code, group in population_data.groupby(code_col):
                 dates = group['date'].values
@@ -308,12 +340,11 @@ def get_scale_options(df, column):
     
     return linear_scale, percentile_scale, std_scale
 
-def get_common_themes(df, epci_df, thematiques_dict):
-    """Récupère les thématiques communes en gérant les multiples thématiques"""
+def get_common_themes(all_data, thematiques_dict):
+    """Récupère toutes les thématiques disponibles"""
     themes_communes = set()
     
-    # Pour chaque DataFrame, récupérer les thématiques
-    for df_temp in [df, epci_df]:
+    for df_temp in all_data.values():
         if df_temp is not None and 'indicateur' in df_temp.columns:
             for indicateur in df_temp['indicateur'].unique():
                 if indicateur in thematiques_dict:
@@ -322,7 +353,7 @@ def get_common_themes(df, epci_df, thematiques_dict):
     return sorted(themes_communes) if themes_communes else []
 
 # ============================================================================
-# FONCTIONS DE GESTION DES GROUPES - OPTIMISÉES
+# FONCTIONS DE GESTION DES GROUPES
 # ============================================================================
 
 def get_available_indicators_with_groups(df, groups_dict, indicator_to_group):
@@ -332,7 +363,6 @@ def get_available_indicators_with_groups(df, groups_dict, indicator_to_group):
     
     available_indicators = []
     
-    # Ajouter les groupes
     for groupe_value, groupe_info in groups_dict.items():
         indicateurs_presents = [ind for ind in groupe_info['indicateurs'] if ind in all_indicators]
         
@@ -345,7 +375,6 @@ def get_available_indicators_with_groups(df, groups_dict, indicator_to_group):
                 'indicateurs': indicateurs_presents
             })
     
-    # Ajouter les indicateurs individuels
     for indicator in all_indicators:
         if indicator in indicateurs_exclus:
             continue
@@ -366,18 +395,15 @@ def get_group_selection_interface(groupe_info, indicator_to_group, default_selec
     display_to_indicator = {}
     display_counts = defaultdict(int)
     
-    # Premier passage pour compter les doublons
     for ind in groupe_info['indicateurs']:
         if ind in indicator_to_group:
             specific_value = indicator_to_group[ind].get('specific_value', '?')
             display_counts[specific_value] += 1
     
-    # Deuxième passage pour créer les options
     for ind in groupe_info['indicateurs']:
         if ind in indicator_to_group:
             specific_value = indicator_to_group[ind].get('specific_value', '?')
             
-            # Si la valeur est un doublon, ajouter un contexte
             if display_counts[specific_value] > 1:
                 context_match = re.search(r'\(([^)]+)\)', ind)
                 if context_match:
@@ -396,13 +422,10 @@ def get_group_selection_interface(groupe_info, indicator_to_group, default_selec
             })
             display_to_indicator[display] = ind
     
-    # Afficher le titre du groupe
     st.markdown(f"**{groupe_info['groupe_nom']}**")
     
-    # Options d'affichage
     options_display = [opt['display'] for opt in indicator_options]
     
-    # Multiselect avec tous les éléments sélectionnés par défaut
     selected_displays = st.multiselect(
         "Sélectionnez les valeurs à additionner",
         options=options_display,
@@ -410,13 +433,11 @@ def get_group_selection_interface(groupe_info, indicator_to_group, default_selec
         key=f"multiselect_{groupe_info['groupe_value']}"
     )
     
-    # Convertir les displays sélectionnés en noms d'indicateurs
     selected_indicators = []
     for disp in selected_displays:
         if disp in display_to_indicator:
             selected_indicators.append(display_to_indicator[disp])
     
-    # Afficher le compteur
     st.caption(f"{len(selected_indicators)}/{len(indicator_options)} valeurs sélectionnées")
     
     return selected_indicators
@@ -426,7 +447,6 @@ def get_group_data(df, groupe_info, selected_indicators, code_col, selected_date
     if not selected_indicators:
         return None
     
-    # Filtrer les données
     group_data = df[
         (df['indicateur'].isin(selected_indicators)) & 
         (df['date'] == selected_date)
@@ -435,7 +455,6 @@ def get_group_data(df, groupe_info, selected_indicators, code_col, selected_date
     if group_data.empty:
         return None
     
-    # Pivoter et sommer
     pivot_data = group_data.pivot_table(
         index=[code_col],
         columns='indicateur',
@@ -444,24 +463,24 @@ def get_group_data(df, groupe_info, selected_indicators, code_col, selected_date
     ).reset_index()
     
     pivot_data = pivot_data.fillna(0)
-    
-    # Calculer la somme
     pivot_data['valeur_somme'] = pivot_data[selected_indicators].sum(axis=1)
     
-    # Vérifier si ce sont probablement des pourcentages qui devraient totaliser 100
     if (pivot_data[selected_indicators].max().max() <= 105 and
         pivot_data[selected_indicators].min().min() >= -5):
         
         diff_avec_100 = (pivot_data['valeur_somme'] - 100).abs()
         pivot_data.loc[diff_avec_100 < SEUIL_CENT, 'valeur_somme'] = 100.0
     
-    # Créer le résultat
     result_df = pivot_data[[code_col, 'valeur_somme']].copy()
     result_df['date'] = selected_date
     result_df['valeur'] = result_df['valeur_somme']
     
-    # Ajouter les libellés
-    libelle_col = 'libelle_commune' if 'commune' in code_col else 'libelle_epci'
+    libelle_col = ECHELLES_CONFIG.get('libelle_col', 'libelle')
+    for config in ECHELLES_CONFIG.values():
+        if config['code_col'] == code_col:
+            libelle_col = config['libelle_col']
+            break
+    
     if libelle_col in group_data.columns:
         libelles = group_data.groupby(code_col)[libelle_col].first().reset_index()
         result_df = result_df.merge(libelles, on=code_col, how='left')
@@ -469,7 +488,6 @@ def get_group_data(df, groupe_info, selected_indicators, code_col, selected_date
         libelle_df = df[df['date'] == selected_date][[code_col, libelle_col]].drop_duplicates()
         result_df = result_df.merge(libelle_df, on=code_col, how='left')
     
-    # Normalisation
     if normalisation_option == "Par surface (ha)" and surface_df is not None:
         result_df = normalize_by_surface(result_df, code_col, surface_df)
     elif normalisation_option == "Par population (1000 hab.)" and population_df is not None:
@@ -478,7 +496,7 @@ def get_group_data(df, groupe_info, selected_indicators, code_col, selected_date
     return result_df
 
 # ============================================================================
-# FONCTION D'AFFICHAGE DE LA DESCRIPTION
+# FONCTIONS D'AFFICHAGE DE LA DESCRIPTION
 # ============================================================================
 
 def show_description(descriptions_dict, indicator_name, indicator_type, selected_indicators=None, 
@@ -486,11 +504,9 @@ def show_description(descriptions_dict, indicator_name, indicator_type, selected
     """Affiche la description de l'indicateur en préservant les sauts de ligne"""
     
     def format_description(text):
-        """Formate la description pour préserver les sauts de ligne"""
         if not text or pd.isna(text):
             return ""
         text = str(text)
-        # Remplacer les sauts de ligne par deux espaces + saut de ligne (format markdown)
         formatted = text.replace('\n', '  \n')
         return formatted
     
@@ -501,11 +517,6 @@ def show_description(descriptions_dict, indicator_name, indicator_type, selected
             st.markdown("### 📝 Description de l'indicateur")
             formatted_desc = format_description(description)
             st.markdown(formatted_desc)
-            
-            # Ajouter la note de normalisation si présente
-            if normalisation_type == "Par ménages" and menages_note:
-                st.markdown("---")
-                st.warning(f"⚠️ {menages_note}")
     
     elif indicator_type == 'groupe' and selected_indicators:
         st.markdown("---")
@@ -517,14 +528,9 @@ def show_description(descriptions_dict, indicator_name, indicator_type, selected
                 with st.expander(f"**{ind}**"):
                     formatted_desc = format_description(description)
                     st.markdown(formatted_desc)
-        
-        # Ajouter la note de normalisation si présente
-        if normalisation_type == "Par ménages" and menages_note:
-            st.markdown("---")
-            st.warning(f"⚠️ {menages_note}")
 
 # ============================================================================
-# FONCTIONS D'AMÉLIORATION DU TITRE ET DE L'AFFICHAGE
+# FONCTIONS D'AMÉLIORATION DU TITRE
 # ============================================================================
 
 def format_group_title(selected_indicators, indicator_to_group, groupe_nom):
@@ -532,7 +538,6 @@ def format_group_title(selected_indicators, indicator_to_group, groupe_nom):
     if not selected_indicators:
         return groupe_nom
     
-    # Récupérer les valeurs spécifiques pour chaque indicateur sélectionné
     values = []
     for ind in selected_indicators:
         if ind in indicator_to_group:
@@ -543,15 +548,12 @@ def format_group_title(selected_indicators, indicator_to_group, groupe_nom):
     if not values:
         return groupe_nom
     
-    # Si une seule valeur, retourner le nom complet
     if len(values) == 1:
         return f"{groupe_nom} ({values[0]})"
     
-    # Si plusieurs valeurs, les lier avec "et"
     if len(values) == 2:
         return f"{groupe_nom} ({values[0]} et {values[1]})"
     
-    # Si plus de 2 valeurs, lier les dernières avec "et"
     if len(values) > 2:
         last_value = values[-1]
         first_values = values[:-1]
@@ -569,68 +571,336 @@ def suggest_scale(values):
     basée sur la distribution des données.
     """
     if len(values) < 5:
-        return "Min-Max"  # Peu de données -> Min-Max
+        return "Min-Max"
     
-    # Calculer les métriques
     mean_val = np.mean(values)
     std_val = np.std(values)
-    min_val = np.min(values)
-    max_val = np.max(values)
     q1 = np.percentile(values, 25)
     q3 = np.percentile(values, 75)
     iqr = q3 - q1
     
-    # Détecter les outliers (valeurs aberrantes)
-    # Utiliser la règle de l'IQR: valeur < Q1 - 1.5*IQR ou > Q3 + 1.5*IQR
     outliers_low = values[values < q1 - 1.5 * iqr]
     outliers_high = values[values > q3 + 1.5 * iqr]
     outlier_count = len(outliers_low) + len(outliers_high)
     outlier_ratio = outlier_count / len(values)
     
-    # Détecter si les données sont fortement asymétriques
     skewness = (mean_val - np.median(values)) / std_val if std_val > 0 else 0
     
-    # Décision
-    # 1. Si beaucoup d'outliers > 5% des données -> utiliser Percentiles
     if outlier_ratio > 0.05:
         return "Percentiles"
     
-    # 2. Si asymétrie forte > 0.5 ou < -0.5
     if abs(skewness) > 0.5:
         return "Percentiles"
     
-    # 3. Si l'écart-type est très grand par rapport à la moyenne (CV > 0.5)
     cv = std_val / mean_val if mean_val != 0 else 0
     if cv > 0.5:
         return "Moyenne ± 2σ"
     
-    # 4. Si les données sont bien distribuées (pas d'outliers, pas d'asymétrie)
     if outlier_ratio < 0.01 and abs(skewness) < 0.2:
         return "Min-Max"
     
-    # 5. Par défaut, si les données sont modérément asymétriques
     if abs(skewness) < 0.5:
         return "Moyenne ± 2σ"
     
-    # 6. En dernier recours
     return "Percentiles"
 
-def get_scale_label(stat_scale, linear_scale, percentile_scale, std_scale, format_str):
-    """Retourne le libellé de l'échelle avec ses valeurs"""
-    if stat_scale == "Min-Max" and linear_scale:
-        return f"Min-Max (min={format_str.format(linear_scale[0])}, max={format_str.format(linear_scale[1])})"
-    elif stat_scale == "Percentiles" and percentile_scale:
-        return f"Percentiles (p5={format_str.format(percentile_scale[0])}, p95={format_str.format(percentile_scale[1])})"
-    elif stat_scale == "Moyenne ± 2σ" and std_scale:
-        return f"Moyenne ± 2σ (m-2σ={format_str.format(std_scale[0])}, m+2σ={format_str.format(std_scale[1])})"
+# ============================================================================
+# FONCTION DE GÉNÉRATION DU GRAPHE D'ÉVOLUTION
+# ============================================================================
+
+def generate_evolution_graph(data, echelle, selected_indicator_info, selected_territory_code,
+                             indicator_to_group, selected_indicators_for_group=None):
+    """
+    Génère le graphe d'évolution temporelle avec moyenne, médiane, département, région
+    """
+    # Récupérer le DataFrame et la configuration
+    df = data.get(echelle)
+    if df is None or df.empty:
+        return None
+    
+    config = ECHELLES_CONFIG[echelle]
+    code_col = config['code_col']
+    libelle_col = config['libelle_col']
+    date_col = 'date'
+    
+    # Déterminer l'indicateur à afficher
+    if selected_indicator_info['type'] == 'individuel':
+        indicator_name = selected_indicator_info['indicateur_nom']
+        indicator_list = [indicator_name]
+        is_group = False
     else:
-        return "Auto"
-
+        indicator_list = selected_indicators_for_group
+        is_group = True
+    
+    # Récupérer toutes les données temporelles pour l'indicateur
+    if is_group:
+        all_data = df[df['indicateur'].isin(indicator_list)].copy()
+    else:
+        all_data = df[df['indicateur'] == indicator_name].copy()
+    
+    if all_data.empty:
+        return None
+    
+    # Vérifier qu'il y a plus d'une date disponible
+    dates_disponibles = all_data['date'].unique()
+    if len(dates_disponibles) <= 1:
+        st.info("ℹ️ Une seule date disponible pour cet indicateur. Pas de graphe d'évolution.")
+        return None
+    
+    # Récupérer le libellé du territoire sélectionné
+    territory_data = df[df[code_col] == selected_territory_code]
+    if not territory_data.empty:
+        territory_libelle = territory_data[libelle_col].iloc[0]
+    else:
+        territory_libelle = selected_territory_code
+    
+    # === 1. PRÉPARER LES DONNÉES POUR LE GRAPHE ===
+    
+    # 1.1 Données du territoire sélectionné
+    territory_series = all_data[all_data[code_col] == selected_territory_code].copy()
+    territory_series = territory_series.groupby(date_col)['valeur'].mean().reset_index()
+    
+    # 1.2 Moyenne par date (pour l'échelle considérée)
+    mean_series = all_data.groupby(date_col)['valeur'].mean().reset_index()
+    
+    # 1.3 Médiane par date (pour l'échelle considérée)
+    median_series = all_data.groupby(date_col)['valeur'].median().reset_index()
+    
+    # === 2. RÉCUPÉRATION DES DONNÉES DÉPARTEMENTALES ET RÉGIONALES ===
+    
+    departement_series_dict = {}  # Pour stocker plusieurs départements
+    region_series_dict = {}       # Pour stocker plusieurs régions
+    
+    # Pour toutes les échelles, essayer de récupérer les départements et régions
+    # Récupérer tous les départements disponibles
+    dept_data = data.get('departements')
+    if dept_data is not None and not dept_data.empty:
+        # Filtrer par indicateur
+        if is_group:
+            dept_filtered = dept_data[dept_data['indicateur'].isin(indicator_list)]
+        else:
+            dept_filtered = dept_data[dept_data['indicateur'] == indicator_name]
+        
+        if not dept_filtered.empty:
+            # Grouper par département et date
+            for dept_code in dept_filtered['code_departement'].unique():
+                dept_subset = dept_filtered[dept_filtered['code_departement'] == dept_code]
+                dept_series = dept_subset.groupby(date_col)['valeur'].mean().reset_index()
+                dept_libelle = dept_data[dept_data['code_departement'] == dept_code]['libelle_departement'].iloc[0]
+                departement_series_dict[dept_code] = {
+                    'data': dept_series,
+                    'libelle': dept_libelle
+                }
+    
+    # Récupérer toutes les régions disponibles
+    region_data = data.get('regions')
+    if region_data is not None and not region_data.empty:
+        # Filtrer par indicateur
+        if is_group:
+            region_filtered = region_data[region_data['indicateur'].isin(indicator_list)]
+        else:
+            region_filtered = region_data[region_data['indicateur'] == indicator_name]
+        
+        if not region_filtered.empty:
+            for region_code in region_filtered['code_region'].unique():
+                region_subset = region_filtered[region_filtered['code_region'] == region_code]
+                region_series = region_subset.groupby(date_col)['valeur'].mean().reset_index()
+                region_libelle = region_data[region_data['code_region'] == region_code]['libelle_region'].iloc[0]
+                region_series_dict[region_code] = {
+                    'data': region_series,
+                    'libelle': region_libelle
+                }
+    
+    # === 3. INTERFACE DE SÉLECTION ===
+    
+    st.markdown("---")
+    st.markdown("### 📈 Évolution temporelle")
+    
+    # Déterminer le libellé de l'échelle pour la moyenne/médiane
+    echelle_label = ECHELLES_CONFIG[echelle]['label']
+    if echelle == 'communes':
+        echelle_label_plural = 'communes'
+    elif echelle == 'epci':
+        echelle_label_plural = 'EPCI'
+    elif echelle == 'departements':
+        echelle_label_plural = 'départements'
+    else:
+        echelle_label_plural = 'régions'
+    
+    # Contrôles pour afficher/masquer les séries
+    col_controls1, col_controls2, col_controls3 = st.columns([1, 1, 1])
+    
+    show_mean = True
+    show_median = True
+    
+    # Par défaut, afficher tous les départements et régions disponibles
+    show_departements = False
+    show_regions = False
+    
+    with col_controls1:
+        st.markdown("**Afficher :**")
+        show_mean = st.checkbox(f"📊 Moyenne ({echelle_label_plural})", value=True, key="show_mean")
+        show_median = st.checkbox(f"📊 Médiane ({echelle_label_plural})", value=True, key="show_median")
+    
+    with col_controls2:
+        st.markdown("**Comparer avec :**")
+        if departement_series_dict:
+            show_departements = st.checkbox("🏛️ Départements", value=True, key="show_departements")
+        if region_series_dict:
+            show_regions = st.checkbox("🌍 Région", value=True, key="show_regions")
+    
+    with col_controls3:
+        st.markdown("**Ajouter des territoires :**")
+        # Multiselect pour ajouter d'autres territoires de la même échelle
+        all_territoires = all_data[[code_col, libelle_col]].drop_duplicates()
+        all_territoires = all_territoires[all_territoires[code_col] != selected_territory_code]
+        
+        if not all_territoires.empty:
+            territoire_options = sorted(all_territoires[libelle_col].tolist())
+            
+            selected_territoires_extra = st.multiselect(
+                f"Territoires supplémentaires (max {MAX_TERRITOIRES_COMPARAISON})",
+                options=territoire_options,
+                default=[],
+                key="territoires_extra"
+            )
+            
+            if len(selected_territoires_extra) > MAX_TERRITOIRES_COMPARAISON:
+                st.warning(f"⚠️ Maximum {MAX_TERRITOIRES_COMPARAISON} territoires supplémentaires")
+                selected_territoires_extra = selected_territoires_extra[:MAX_TERRITOIRES_COMPARAISON]
+        else:
+            selected_territoires_extra = []
+    
+    # Récupérer les données des territoires supplémentaires
+    extra_series = []
+    for territoire_libelle in selected_territoires_extra:
+        code = all_territoires[all_territoires[libelle_col] == territoire_libelle][code_col].iloc[0]
+        extra_data = all_data[all_data[code_col] == code].copy()
+        if not extra_data.empty:
+            extra_series.append({
+                'data': extra_data.groupby(date_col)['valeur'].mean().reset_index(),
+                'libelle': territoire_libelle,
+                'code': code
+            })
+    
+    # === 4. GÉNÉRATION DU GRAPHE ===
+    
+    fig = go.Figure()
+    
+    # Palette de couleurs
+    colors = px.colors.qualitative.Plotly
+    dept_colors = px.colors.qualitative.Set2
+    region_colors = px.colors.qualitative.Set1
+    
+    # 4.1 Territoire sélectionné (en bleu foncé, trait plein, plus épais)
+    if not territory_series.empty:
+        fig.add_trace(go.Scatter(
+            x=territory_series['date'],
+            y=territory_series['valeur'],
+            mode='lines+markers',
+            name=territory_libelle,
+            line=dict(color='#1f77b4', width=3),
+            marker=dict(size=8)
+        ))
+    
+    # 4.2 Moyenne (en gris, pointillés)
+    if show_mean and not mean_series.empty:
+        fig.add_trace(go.Scatter(
+            x=mean_series['date'],
+            y=mean_series['valeur'],
+            mode='lines+markers',
+            name=f'Moyenne ({echelle_label_plural})',
+            line=dict(color='#7f7f7f', width=2, dash='dash'),
+            marker=dict(size=6)
+        ))
+    
+    # 4.3 Médiane (en gris clair, pointillés)
+    if show_median and not median_series.empty:
+        fig.add_trace(go.Scatter(
+            x=median_series['date'],
+            y=median_series['valeur'],
+            mode='lines+markers',
+            name=f'Médiane ({echelle_label_plural})',
+            line=dict(color='#b0b0b0', width=2, dash='dot'),
+            marker=dict(size=6)
+        ))
+    
+    # 4.4 Départements (en orange/rouge)
+    if show_departements and departement_series_dict:
+        dept_idx = 0
+        for dept_code, dept_info in departement_series_dict.items():
+            if not dept_info['data'].empty:
+                color_idx = dept_idx % len(dept_colors)
+                fig.add_trace(go.Scatter(
+                    x=dept_info['data']['date'],
+                    y=dept_info['data']['valeur'],
+                    mode='lines+markers',
+                    name=f"Département {dept_info['libelle']}",
+                    line=dict(color=dept_colors[color_idx], width=2, dash='dashdot'),
+                    marker=dict(size=6)
+                ))
+                dept_idx += 1
+    
+    # 4.5 Régions (en vert)
+    if show_regions and region_series_dict:
+        reg_idx = 0
+        for region_code, region_info in region_series_dict.items():
+            if not region_info['data'].empty:
+                color_idx = reg_idx % len(region_colors)
+                fig.add_trace(go.Scatter(
+                    x=region_info['data']['date'],
+                    y=region_info['data']['valeur'],
+                    mode='lines+markers',
+                    name=f"Région {region_info['libelle']}",
+                    line=dict(color=region_colors[color_idx], width=2, dash='dot'),
+                    marker=dict(size=7)
+                ))
+                reg_idx += 1
+    
+    # 4.6 Territoires supplémentaires
+    for i, extra in enumerate(extra_series):
+        color_idx = i % len(colors)
+        fig.add_trace(go.Scatter(
+            x=extra['data']['date'],
+            y=extra['data']['valeur'],
+            mode='lines+markers',
+            name=extra['libelle'],
+            line=dict(color=colors[color_idx], width=2),
+            marker=dict(size=7)
+        ))
+    
+    # Mise en forme du graphe
+    fig.update_layout(
+        title=f"Évolution de {selected_indicator_info['groupe_nom'] if selected_indicator_info['type'] == 'groupe' else selected_indicator_info['indicateur_nom']}",
+        xaxis_title="Date",
+        yaxis_title="Valeur",
+        hovermode='x unified',
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        ),
+        height=400,
+        margin=dict(l=50, r=50, t=50, b=50),
+        xaxis=dict(
+            tickformat="%d/%m/%Y",
+            tickangle=45
+        ),
+        yaxis=dict(
+            showgrid=True,
+            gridwidth=1,
+            gridcolor='lightgray'
+        )
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
 # ============================================================================
-# FONCTION PRINCIPALE D'AFFICHAGE - OPTIMISÉE
+# FONCTION PRINCIPALE D'AFFICHAGE
 # ============================================================================
 
-def show(df, epci_df):
+def show(data):
     # Charger les sources et les groupes
     indicator_sources, groups_dict, indicator_to_group, descriptions_dict, thematiques_dict = load_indicator_sources_and_groups()
     
@@ -639,13 +909,38 @@ def show(df, epci_df):
     
     st.title("📊 Visualisation Cartographique des indicateurs de l'ORTB")
     
-    common_themes = get_common_themes(df, epci_df, thematiques_dict)
+    # Filtrer les échelles disponibles
+    available_echelles = {}
+    for key, config in ECHELLES_CONFIG.items():
+        if data.get(key) is not None and not data[key].empty:
+            available_echelles[key] = config
+    
+    if not available_echelles:
+        st.error("Aucune donnée disponible")
+        return
+    
+    common_themes = get_common_themes(data, thematiques_dict)
     
     # Contrôles principaux
     col1, col2, col3, col4 = st.columns([1, 0.7, 1.5, 0.6])
     
     with col1:
-        echelle = st.radio("Échelle", options=["Commune", "EPCI"], horizontal=True)
+        echelle_keys = list(available_echelles.keys())
+        echelle_labels = [config['label'] for config in available_echelles.values()]
+        selected_echelle_label = st.radio("Échelle", options=echelle_labels, horizontal=True)
+        
+        # Trouver la clé correspondante
+        echelle = None
+        for key, config in available_echelles.items():
+            if config['label'] == selected_echelle_label:
+                echelle = key
+                break
+    
+    # Récupérer le DataFrame correspondant
+    df_to_use = data.get(echelle)
+    config = ECHELLES_CONFIG[echelle]
+    code_col = config['code_col']
+    libelle_col = config['libelle_col']
     
     with col2:
         if common_themes:
@@ -654,11 +949,8 @@ def show(df, epci_df):
             selected_thematique = "Toutes"
     
     with col3:
-        df_to_use = df if echelle == "Commune" else epci_df
-        
-        # OPTIMISATION: Filtrer par thématique de manière vectorisée
+        # Filtrer par thématique
         if selected_thematique != "Toutes":
-            # Créer un masque pour filtrer les indicateurs de la thématique
             mask = df_to_use['indicateur'].apply(
                 lambda x: x in thematiques_dict and selected_thematique in thematiques_dict[x]
             )
@@ -738,33 +1030,22 @@ def show(df, epci_df):
     
     with col_scale2:
         stat_scale_options = ["Auto", "Min-Max", "Percentiles", "Moyenne ± 2σ"]
-        # Sélection avec l'option "Auto"
         stat_scale = st.selectbox("Échelle", stat_scale_options, index=0)
         reverse_scale = st.checkbox("Inverser")
     
     # Données de normalisation
-    if echelle == "Commune":
-        surface_df, population_df = get_surface_population_data(df, "Commune", selected_date)
-        code_col = 'code_commune'
-        date_col = 'date'
-    else:
-        surface_df, population_df = get_surface_population_data(epci_df, "EPCI", selected_date)
-        code_col = 'code_epci'
-        date_col = 'date'
+    surface_df, population_df = get_surface_population_data(df_to_use, echelle, selected_date)
+    date_col = 'date'
     
     # Récupération des données
-    # Initialiser menages_note à None avant les conditions
     menages_note = None
     
     if selected_indicator_info['type'] == 'individuel':
-        if echelle == "Commune":
-            filtered_df = df[(df['indicateur'] == selected_indicator_info['indicateur_nom']) & 
-                           (df['date'] == selected_date)].copy()
-        else:
-            filtered_df = epci_df[(epci_df['indicateur'] == selected_indicator_info['indicateur_nom']) & 
-                                 (epci_df['date'] == selected_date)].copy()
+        filtered_df = df_to_use[
+            (df_to_use['indicateur'] == selected_indicator_info['indicateur_nom']) & 
+            (df_to_use['date'] == selected_date)
+        ].copy()
         
-        # Normalisation
         suffixe_titre = ""
         
         if normalisation_option == "Par surface" and surface_df is not None:
@@ -780,7 +1061,7 @@ def show(df, epci_df):
             if 'valeur_normalisee' in filtered_df.columns:
                 valeur_colonne = 'valeur_normalisee'
                 suffixe_titre = " (par ménage)"
-                menages_note = "Attention: Du fait de la disponibilité de la donnée ménages uniquement pour 3 années (2012, 2017 et 2023), la division des données par le nombre de ménages se fait en utilisant l'année précédente. Exemple: Les données de 2020 seront divisées par les données de ménages de 2017"
+                menages_note = "Attention: Du fait de la disponibilité de la donnée ménages uniquement pour 3 années (2012, 2017 et 2023), la division des données par le nombre de ménages se fait en utilisant la plus proche année antérieure. Exemple: Les données de 2020 seront divisées par les données de ménages de 2017"
             else:
                 valeur_colonne = 'valeur'
                 st.warning("Impossible de normaliser par ménages pour certains territoires")
@@ -792,7 +1073,6 @@ def show(df, epci_df):
         source_key = selected_indicator_info['indicateur_nom']
         
     else:  # Groupe
-        # Conversion de la normalisation pour les groupes
         norm_option_for_group = "Aucune"
         if normalisation_option == "Par surface":
             norm_option_for_group = "Par surface (ha)"
@@ -800,7 +1080,7 @@ def show(df, epci_df):
             norm_option_for_group = "Par population (1000 hab.)"
         
         filtered_df = get_group_data(
-            df_to_use if echelle == "Commune" else epci_df,
+            df_to_use,
             selected_indicator_info,
             selected_indicators_for_group,
             code_col,
@@ -814,7 +1094,6 @@ def show(df, epci_df):
             st.error("Aucune donnée disponible")
             return
         
-        # Normalisation par ménages pour les groupes
         if normalisation_option == "Par ménages" and menages_data is not None:
             filtered_df, menages_notes = normalize_by_menages(filtered_df, code_col, date_col, menages_data)
             if 'valeur_normalisee' in filtered_df.columns:
@@ -838,7 +1117,6 @@ def show(df, epci_df):
                 valeur_colonne = 'valeur'
                 suffixe_titre = ""
         
-        # Formater le titre du groupe avec les valeurs sélectionnées
         titre_indicateur = format_group_title(
             selected_indicators_for_group, 
             indicator_to_group, 
@@ -846,20 +1124,20 @@ def show(df, epci_df):
         )
         source_key = None
     
+    # === AFFICHAGE DU MESSAGE D'AVERTISSEMENT POUR LES MÉNAGES ===
+    if normalisation_option == "Par ménages" and menages_note:
+        st.warning(f"⚠️ {menages_note}")
+    
     # Nettoyer les valeurs proches de 100
     if valeur_colonne in filtered_df.columns:
         mask_proche_100 = (filtered_df[valeur_colonne] - 100).abs() < SEUIL_CENT
         filtered_df.loc[mask_proche_100, valeur_colonne] = 100.0
     
-    # === SÉLECTION AUTOMATIQUE DE L'ÉCHELLE ===
-    # Récupérer les valeurs pour l'analyse
+    # Sélection automatique de l'échelle
     valeurs = filtered_df[valeur_colonne].dropna().values
-    
-    # Si "Auto" est sélectionné, choisir automatiquement la meilleure échelle
-    stat_scale_original = stat_scale  # Garder la valeur originale pour l'affichage
+    stat_scale_original = stat_scale
     if stat_scale == "Auto" and len(valeurs) > 0:
         suggested_scale = suggest_scale(valeurs)
-        # Utiliser l'échelle suggérée
         stat_scale = suggested_scale
     
     # Échelle de couleurs
@@ -868,81 +1146,67 @@ def show(df, epci_df):
     
     if stat_scale == "Min-Max" and linear_scale:
         range_color = linear_scale
-        range_note = f"min={format_str.format(linear_scale[0])}, max={format_str.format(linear_scale[1])}"
         scale_display_name = f"Min-Max (min={format_str.format(linear_scale[0])}, max={format_str.format(linear_scale[1])})"
     elif stat_scale == "Percentiles" and percentile_scale:
         range_color = percentile_scale
-        range_note = f"p5={format_str.format(percentile_scale[0])}, p95={format_str.format(percentile_scale[1])}"
         scale_display_name = f"Percentiles (p5={format_str.format(percentile_scale[0])}, p95={format_str.format(percentile_scale[1])})"
     elif stat_scale == "Moyenne ± 2σ" and std_scale:
         range_color = std_scale
-        range_note = f"m±2σ=[{format_str.format(std_scale[0])}, {format_str.format(std_scale[1])}]"
         scale_display_name = f"Moyenne ± 2σ (m-2σ={format_str.format(std_scale[0])}, m+2σ={format_str.format(std_scale[1])})"
     else:
         range_color = None
-        range_note = "Auto"
         scale_display_name = "Auto"
     
-    # Si "Auto" a été sélectionné, ajouter une indication
     if stat_scale_original == "Auto":
         scale_display_name = f"Auto → {scale_display_name}"
     
     color_scale = scale_options + ("_r" if reverse_scale else "")
     
     # Création de la carte
-    if echelle == "Commune":
-        communes_geojson = load_geojson("data/communes_simple.geojson")
-        
-        source_text = ""
-        if source_key and source_key in indicator_sources and pd.notna(indicator_sources[source_key]):
-            source_text = f"<br><sub>Source : {indicator_sources[source_key]}</sub>"
-        
-        fig = px.choropleth(
-            filtered_df,
-            geojson=communes_geojson,
-            locations='code_commune',
-            featureidkey="properties.code",
-            color=valeur_colonne,
-            hover_name='libelle_commune' if 'libelle_commune' in filtered_df.columns else None,
-            hover_data={valeur_colonne: f':.{PRECISION_DECIMALES}f'},
-            color_continuous_scale=color_scale,
-            range_color=range_color,
-            scope="europe",
-            center={"lat": 46.8, "lon": -2.3},
-            title=f"{titre_indicateur}{suffixe_titre}<br><sub>Méthode : {scale_display_name}</sub>{source_text}")
-        
-    else:
-        epci_geojson = load_geojson("data/epci_simple.geojson")
-        
-        source_text = ""
-        if source_key and source_key in indicator_sources and pd.notna(indicator_sources[source_key]):
-            source_text = f"<br><sub>Source : {indicator_sources[source_key]}</sub>"
-        
-        fig = px.choropleth(
-            filtered_df,
-            geojson=epci_geojson,
-            locations='code_epci',
-            featureidkey="properties.code",
-            color=valeur_colonne,
-            hover_name='libelle_epci' if 'libelle_epci' in filtered_df.columns else None,
-            hover_data={valeur_colonne: f':.{PRECISION_DECIMALES}f'},
-            color_continuous_scale=color_scale,
-            range_color=range_color,
-            scope="europe",
-            center={"lat": 46.8, "lon": -2.3},
-            title=f"{titre_indicateur}{suffixe_titre}<br><sub>Méthode : {scale_display_name} </sub>{source_text}")
+    geojson = load_geojson(config['geojson'])
+    center = config['center']
+    
+    source_text = ""
+    if source_key and source_key in indicator_sources and pd.notna(indicator_sources[source_key]):
+        source_text = f"<br><sub>Source : {indicator_sources[source_key]}</sub>"
+    
+    fig = px.choropleth(
+        filtered_df,
+        geojson=geojson,
+        locations=code_col,
+        featureidkey="properties.code",
+        color=valeur_colonne,
+        hover_name=libelle_col if libelle_col in filtered_df.columns else None,
+        hover_data={valeur_colonne: f':.{PRECISION_DECIMALES}f'},
+        color_continuous_scale=color_scale,
+        range_color=range_color,
+        scope="europe",
+        center=center,
+        title=f"{titre_indicateur}{suffixe_titre}<br><sub>Méthode : {scale_display_name}</sub>{source_text}")
     
     fig.update_geos(fitbounds="locations", visible=False)
-    # RÉDUCTION DE L'ESPACE VIDE APRÈS LA CARTE
     fig.update_layout(
         width=1000, 
-        height=900,  # Réduit de 1000 à 900
-        margin=dict(l=0, r=0, t=50, b=10)  # Réduit la marge du bas
+        height=900,
+        margin=dict(l=0, r=0, t=50, b=10)
     )
     st.plotly_chart(fig, use_container_width=True)
     
-    # --- AFFICHAGE DE LA DESCRIPTION ---
-    # menages_note est déjà défini plus haut dans la fonction
+    # === GRAPHE D'ÉVOLUTION TEMPORELLE ===
+    # Récupérer le code du territoire sélectionné pour le graphe
+    selected_territory_code = filtered_df[code_col].iloc[0] if not filtered_df.empty else None
+    
+    if selected_territory_code is not None:
+        generate_evolution_graph(
+            data=data,
+            echelle=echelle,
+            selected_indicator_info=selected_indicator_info,
+            selected_territory_code=selected_territory_code,
+            indicator_to_group=indicator_to_group,
+            selected_indicators_for_group=selected_indicators_for_group
+        )
+    
+    # Affichage de la description
     if selected_indicator_info['type'] == 'individuel':
         show_description(
             descriptions_dict,
@@ -961,11 +1225,10 @@ def show(df, epci_df):
             menages_note=menages_note
         )
     
-    # Statistiques avec la précision configurée
+    # Statistiques
     with st.expander("📈 Statistiques"):
         col_stat1, col_stat2, col_stat3 = st.columns(3)
         with col_stat1:
-            # Pour la moyenne, on peut aussi arrondir les valeurs proches de 100
             mean_val = filtered_df[valeur_colonne].mean()
             if abs(mean_val - 100) < SEUIL_CENT:
                 mean_val = 100.0
@@ -978,21 +1241,18 @@ def show(df, epci_df):
         with col_stat3:
             st.metric("Écart-type", format_str.format(filtered_df[valeur_colonne].std()))
     
-    # Données détaillées avec la précision configurée
+    # Données détaillées
     with st.expander("📋 Données détaillées"):
-        # Créer le titre avec la date et les indicateurs
         date_str = selected_date.strftime('%d/%m/%Y')
         
         if selected_indicator_info['type'] == 'individuel':
             titre_detail = f"Données pour {selected_indicator_info['indicateur_nom']} - {date_str}"
         else:
-            # Formater le nom du groupe avec les valeurs sélectionnées
             groupe_titre = format_group_title(
                 selected_indicators_for_group, 
                 indicator_to_group, 
                 selected_indicator_info['groupe_nom']
             )
-            # Récupérer les noms des indicateurs sélectionnés
             indicateurs_noms = []
             for ind in selected_indicators_for_group:
                 if ind in indicator_to_group:
@@ -1014,27 +1274,19 @@ def show(df, epci_df):
                 liste_indicateurs = f"{', '.join(first_inds)} et {last_ind}"
             
             titre_detail = f"Données pour {groupe_titre} - {date_str}"
-            # Ajouter les indicateurs détaillés en sous-titre
             st.caption(f"Indicateurs inclus : {liste_indicateurs}")
         
         st.markdown(f"**{titre_detail}**")
         
-        if echelle == "Commune":
-            display_cols = ['libelle_commune', 'code_commune', valeur_colonne]
-        else:
-            display_cols = ['libelle_epci', 'code_epci', valeur_colonne]
-        
-        # Ajouter une colonne avec le nom de l'indicateur et la date pour l'export
-        # Créer une colonne 'indicateur_date' qui sera incluse dans le DataFrame exporté
+        display_cols = [libelle_col, code_col, valeur_colonne]
+        display_cols = [col for col in display_cols if col in filtered_df.columns]
         display_df = filtered_df[display_cols].copy()
         
-        # Ajouter des colonnes d'information pour l'export
         display_df['Date'] = date_str
         
         if selected_indicator_info['type'] == 'individuel':
             display_df['Indicateur'] = selected_indicator_info['indicateur_nom']
         else:
-            # Pour les groupes, mettre le nom du groupe et les indicateurs inclus
             groupe_titre = format_group_title(
                 selected_indicators_for_group, 
                 indicator_to_group, 
@@ -1042,7 +1294,6 @@ def show(df, epci_df):
             )
             display_df['Indicateur'] = groupe_titre
             
-            # Ajouter une colonne avec la liste détaillée des indicateurs
             indicateurs_noms = []
             for ind in selected_indicators_for_group:
                 if ind in indicator_to_group:
@@ -1055,12 +1306,9 @@ def show(df, epci_df):
                     indicateurs_noms.append(ind)
             display_df['Indicateurs inclus'] = ', '.join(indicateurs_noms)
         
-        # Arrondir les valeurs et corriger celles proches de 100
         if valeur_colonne in display_df.columns:
-            # Corriger les valeurs proches de 100
             mask_proche_100 = (display_df[valeur_colonne] - 100).abs() < SEUIL_CENT
             display_df.loc[mask_proche_100, valeur_colonne] = 100.0
-            # Arrondir
             display_df[valeur_colonne] = display_df[valeur_colonne].round(PRECISION_DECIMALES)
         
         if valeur_colonne == 'valeur_normalisee':

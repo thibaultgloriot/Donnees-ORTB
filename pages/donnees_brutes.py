@@ -2,43 +2,42 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
-def show(df_communes, df_epci):
+# Configuration des échelles
+ECHELLES_CONFIG = {
+    'communes': {
+        'label': 'Commune',
+        'code_col': 'code_commune',
+        'libelle_col': 'libelle_commune'
+    },
+    'epci': {
+        'label': 'EPCI',
+        'code_col': 'code_epci',
+        'libelle_col': 'libelle_epci'
+    },
+    'departements': {
+        'label': 'Département',
+        'code_col': 'code_departement',
+        'libelle_col': 'libelle_departement'
+    },
+    'regions': {
+        'label': 'Région',
+        'code_col': 'code_region',
+        'libelle_col': 'libelle_region'
+    }
+}
+
+def show(data):
     st.title("📁 Données Brutes")
     
     # Vérifier qu'au moins un DataFrame est fourni
-    if df_communes is None and df_epci is None:
-        st.error("Aucune donnée fournie. Veuillez fournir au moins un DataFrame (communes ou EPCI).")
-        return
+    available_echelles = {}
+    for key, config in ECHELLES_CONFIG.items():
+        if data.get(key) is not None and not data[key].empty:
+            available_echelles[key] = config
     
-    # Préparer les DataFrames
-    if df_communes is not None and df_epci is not None:
-        # Préparer les deux DataFrames séparément
-        df_communes_prepared = df_communes.copy()
-        df_epci_prepared = df_epci.copy()
-        
-        # Ajouter colonne maille
-        if 'maille' not in df_communes_prepared.columns:
-            df_communes_prepared['maille'] = 'Commune'
-        if 'maille' not in df_epci_prepared.columns:
-            df_epci_prepared['maille'] = 'EPCI'
-            
-        # Utiliser le DataFrame correspondant à la maille sélectionnée
-        df_dict = {
-            'Commune': df_communes_prepared,
-            'EPCI': df_epci_prepared
-        }
-        
-    elif df_communes is not None:
-        df_communes_prepared = df_communes.copy()
-        if 'maille' not in df_communes_prepared.columns:
-            df_communes_prepared['maille'] = 'Commune'
-        df_dict = {'Commune': df_communes_prepared}
-        
-    else:  # seulement df_epci
-        df_epci_prepared = df_epci.copy()
-        if 'maille' not in df_epci_prepared.columns:
-            df_epci_prepared['maille'] = 'EPCI'
-        df_dict = {'EPCI': df_epci_prepared}
+    if not available_echelles:
+        st.error("Aucune donnée disponible")
+        return
     
     # Sidebar pour les filtres
     with st.sidebar:
@@ -48,19 +47,28 @@ def show(df_communes, df_epci):
         st.info("ℹ️ Veuillez sélectionner vos filtres ci-dessous")
         st.markdown("---")
         
-        # Options de maille disponibles
-        maille_options = list(df_dict.keys())
+        # Sélection de la maille
+        echelle_options = list(available_echelles.keys())
+        echelle_labels = [config['label'] for config in available_echelles.values()]
         
-        # Sélection de la maille avec clé statique
-        maille = st.selectbox(
+        selected_echelle_label = st.selectbox(
             "Maille territoriale",
-            options=maille_options,
+            options=echelle_labels,
             index=0,
             key="maille_territoriale_select"
         )
         
-        # Récupérer le DataFrame pour cette maille
-        current_df = df_dict[maille]
+        # Trouver la clé correspondante
+        echelle = None
+        for key, config in available_echelles.items():
+            if config['label'] == selected_echelle_label:
+                echelle = key
+                break
+        
+        config = ECHELLES_CONFIG[echelle]
+        current_df = data[echelle].copy()
+        code_col = config['code_col']
+        libelle_col = config['libelle_col']
         
         # Initialiser les sélections
         codes_selection = []
@@ -68,102 +76,31 @@ def show(df_communes, df_epci):
         indicateurs_selection = []
         dates_selection = []
         
-        # Filtrer par territoire selon la maille
-        if maille == 'Commune':
-            # Utiliser libelle_commune si disponible
-            if 'libelle_commune' in current_df.columns:
-                communes = sorted(current_df['libelle_commune'].dropna().unique().tolist())
-                if communes:
-                    selected_communes = st.multiselect(
-                        "Sélectionner les communes",
-                        options=communes,
-                        default=[],
-                        key="communes_select"
-                    )
-                    
-                    # Bouton Tout pour communes
-                    col_btn1, col_btn2 = st.columns(2)
-                    with col_btn1:
-                        if st.button("Tout", key="btn_all_communes"):
-                            selected_communes = communes
-                    with col_btn2:
-                        if st.button("Aucun", key="btn_no_communes"):
-                            selected_communes = []
-                    
-                    # Convertir noms en codes si besoin
-                    if selected_communes and 'code_commune' in current_df.columns:
-                        # Créer un mapping temporaire
-                        temp_df = current_df[['code_commune', 'libelle_commune']].drop_duplicates()
-                        mapping = dict(zip(temp_df['libelle_commune'], temp_df['code_commune']))
-                        codes_selection = [mapping.get(name) for name in selected_communes if name in mapping]
-                else:
-                    st.info("Aucune commune disponible")
-            elif 'code_commune' in current_df.columns:
-                codes = sorted(current_df['code_commune'].dropna().unique().astype(str).tolist())
-                if codes:
-                    codes_selection = st.multiselect(
-                        "Sélectionner les communes (codes)",
-                        options=codes,
-                        default=[],
-                        key="communes_codes_select"
-                    )
-                    
-                    col_btn1, col_btn2 = st.columns(2)
-                    with col_btn1:
-                        if st.button("Tout", key="btn_all_communes_codes"):
-                            codes_selection = codes
-                    with col_btn2:
-                        if st.button("Aucun", key="btn_no_communes_codes"):
-                            codes_selection = []
-                else:
-                    st.info("Aucun code de commune disponible")
-                    
-        elif maille == 'EPCI':
-            # Utiliser libelle_epci si disponible
-            if 'libelle_epci' in current_df.columns:
-                epcis = sorted(current_df['libelle_epci'].dropna().unique().tolist())
-                if epcis:
-                    selected_epcis = st.multiselect(
-                        "Sélectionner les EPCI",
-                        options=epcis,
-                        default=[],
-                        key="epci_select"
-                    )
-                    
-                    col_btn1, col_btn2 = st.columns(2)
-                    with col_btn1:
-                        if st.button("Tout", key="btn_all_epci"):
-                            selected_epcis = epcis
-                    with col_btn2:
-                        if st.button("Aucun", key="btn_no_epci"):
-                            selected_epcis = []
-                    
-                    # Convertir noms en codes si besoin
-                    if selected_epcis and 'code_epci' in current_df.columns:
-                        temp_df = current_df[['code_epci', 'libelle_epci']].drop_duplicates()
-                        mapping = dict(zip(temp_df['libelle_epci'], temp_df['code_epci']))
-                        codes_selection = [mapping.get(name) for name in selected_epcis if name in mapping]
-                else:
-                    st.info("Aucun EPCI disponible")
-            elif 'code_epci' in current_df.columns:
-                codes = sorted(current_df['code_epci'].dropna().unique().astype(str).tolist())
-                if codes:
-                    codes_selection = st.multiselect(
-                        "Sélectionner les EPCI (codes)",
-                        options=codes,
-                        default=[],
-                        key="epci_codes_select"
-                    )
-                    
-                    col_btn1, col_btn2 = st.columns(2)
-                    with col_btn1:
-                        if st.button("Tout", key="btn_all_epci_codes"):
-                            codes_selection = codes
-                    with col_btn2:
-                        if st.button("Aucun", key="btn_no_epci_codes"):
-                            codes_selection = []
-                else:
-                    st.info("Aucun code d'EPCI disponible")
+        # Filtrer par territoire
+        if libelle_col in current_df.columns:
+            territoires = sorted(current_df[libelle_col].dropna().unique().tolist())
+            if territoires:
+                selected_territoires = st.multiselect(
+                    f"Sélectionner les {config['label'].lower()}s",
+                    options=territoires,
+                    default=[],
+                    key="territoires_select"
+                )
+                
+                col_btn1, col_btn2 = st.columns(2)
+                with col_btn1:
+                    if st.button("Tout", key="btn_all_territoires"):
+                        selected_territoires = territoires
+                with col_btn2:
+                    if st.button("Aucun", key="btn_no_territoires"):
+                        selected_territoires = []
+                
+                if selected_territoires and code_col in current_df.columns:
+                    temp_df = current_df[[code_col, libelle_col]].drop_duplicates()
+                    mapping = dict(zip(temp_df[libelle_col], temp_df[code_col]))
+                    codes_selection = [mapping.get(name) for name in selected_territoires if name in mapping]
+            else:
+                st.info(f"Aucun {config['label'].lower()} disponible")
         
         # Filtrer par thématique
         if 'thematique' in current_df.columns:
@@ -231,15 +168,12 @@ def show(df_communes, df_epci):
         
         st.markdown("---")
         
-        # Boutons d'action
         col1, col2 = st.columns(2)
         with col1:
             if st.button("🧹 Tout remplir", type="primary", use_container_width=True, key="btn_fill_all"):
-                # Le rerun sera géré par les boutons individuels
                 st.info("Utilisez les boutons 'Tout' de chaque section")
         with col2:
             if st.button("🗑️ Réinitialiser", use_container_width=True, key="btn_reset"):
-                # Réinitialiser les sélections
                 st.session_state.clear()
                 st.rerun()
     
@@ -258,10 +192,10 @@ def show(df_communes, df_epci):
         if not has_filters:
             st.markdown("---")
             st.markdown("### 📋 Instructions")
-            st.info("""
+            st.info(f"""
             **Veuillez sélectionner les filtres à gauche de l'écran :**
             
-            1. **Choisissez une maille territoriale** (Commune ou EPCI)
+            1. **Choisissez une maille territoriale** ({', '.join(echelle_labels)})
             2. **Sélectionnez les territoires** concernés
             3. **Filtrez par thématique**, indicateur ou date selon vos besoins
             4. Utilisez les boutons **"Tout"** pour sélectionner toutes les options d'un filtre
@@ -277,10 +211,7 @@ def show(df_communes, df_epci):
         
         # Filtrer par territoire
         if codes_selection and len(codes_selection) > 0:
-            if maille == 'Commune' and 'code_commune' in filtered_df.columns:
-                filtered_df = filtered_df[filtered_df['code_commune'].astype(str).isin([str(c) for c in codes_selection])]
-            elif maille == 'EPCI' and 'code_epci' in filtered_df.columns:
-                filtered_df = filtered_df[filtered_df['code_epci'].astype(str).isin([str(c) for c in codes_selection])]
+            filtered_df = filtered_df[filtered_df[code_col].astype(str).isin([str(c) for c in codes_selection])]
         
         # Filtrer par thématique
         if thematiques_selection and len(thematiques_selection) > 0:
@@ -307,17 +238,11 @@ def show(df_communes, df_epci):
         # Réorganiser les colonnes
         col_order = []
         
-        # Colonnes territoriales selon la maille
-        if maille == 'Commune':
-            if 'libelle_commune' in display_df.columns:
-                col_order.append('libelle_commune')
-            if 'code_commune' in display_df.columns:
-                col_order.append('code_commune')
-        else:
-            if 'libelle_epci' in display_df.columns:
-                col_order.append('libelle_epci')
-            if 'code_epci' in display_df.columns:
-                col_order.append('code_epci')
+        # Colonnes territoriales
+        if libelle_col in display_df.columns:
+            col_order.append(libelle_col)
+        if code_col in display_df.columns:
+            col_order.append(code_col)
         
         # Colonnes principales
         main_cols = ['maille', 'date', 'thematique', 'indicateur', 'valeur', 'unite']
@@ -341,7 +266,7 @@ def show(df_communes, df_epci):
         st.download_button(
             label="📥 Télécharger les données (CSV)",
             data=csv,
-            file_name=f"donnees_{maille.lower()}_filtrees.csv",
+            file_name=f"donnees_{echelle}_filtrees.csv",
             mime="text/csv",
             use_container_width=True
         )

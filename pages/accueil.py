@@ -1,25 +1,27 @@
 import streamlit as st
 import pandas as pd
 
-def show(df, epci_df):
+def show(data):
     st.title("🏠 Plateforme de visualisation des données de l'ORTB")
     
     # KPI globaux
-    col1, col2, col3, col4 = st.columns(4)
+    echelles = {
+        'communes': 'Communes',
+        'epci': 'EPCI',
+        'departements': 'Départements',
+        'regions': 'Régions'
+    }
     
-    with col1:
-        st.metric("Nombre d'indicateurs à l'échelle commune", df['indicateur'].nunique())
-    with col2:
-        st.metric("Nombre d'indicateurs à l'échelle EPCI", epci_df['indicateur'].nunique())
+    # Créer une ligne de métriques pour chaque échelle
+    cols = st.columns(4)
     
-    with col3:
-        st.metric("Nombre de communes", df['code_commune'].nunique())
-    
-    with col4:
-        if epci_df is not None:
-            st.metric("Nombre d'EPCI", 61)
-        else:
-            st.metric("Période couverte", f"{df['date'].min().year}-{df['date'].max().year}")
+    for i, (key, label) in enumerate(echelles.items()):
+        if data.get(key) is not None and not data[key].empty:
+            with cols[i]:
+                st.metric(
+                    f"Indicateurs ({label})",
+                    data[key]['indicateur'].nunique()
+                )
     
     # Charger les données des groupes
     try:
@@ -47,18 +49,16 @@ def show(df, epci_df):
                         'nom_groupe': group_names.get(groupe_str, f"Groupe {groupe_str}")
                     }
         
-        # Récupérer les thématiques avec gestion des multiples
+        # Récupérer les thématiques
         thematiques_dict = {}
         if 'Thématique' in mapping_df.columns:
             for _, row in mapping_df.iterrows():
                 if pd.notna(row['Thématique']) and row['Thématique'] != '':
-                    # CORRECTION: Split par ; et nettoyer
                     themes = [t.strip() for t in str(row['Thématique']).split(';') if t.strip()]
-                    if themes:  # Ne garder que si la liste n'est pas vide
+                    if themes:
                         thematiques_dict[row[indicator_col]] = themes
         
-    except Exception as e:
-        st.error(f"Erreur lors du chargement du mapping: {e}")
+    except:
         indicator_to_group = {}
         thematiques_dict = {}
     
@@ -68,8 +68,8 @@ def show(df, epci_df):
     # Récupérer toutes les thématiques uniques
     all_thematiques = set()
     
-    # Parcourir les DataFrames pour récupérer les thématiques
-    for df_temp in [df, epci_df]:
+    # Parcourir toutes les données pour récupérer les thématiques
+    for df_temp in data.values():
         if df_temp is not None and 'indicateur' in df_temp.columns:
             for indicateur in df_temp['indicateur'].unique():
                 if indicateur in thematiques_dict:
@@ -82,8 +82,8 @@ def show(df, epci_df):
                 indicateurs_vus = set()
                 groupes_comptes = {}
                 
-                # Parcourir les DataFrames pour collecter les indicateurs UNIQUES
-                for df_temp in [df, epci_df]:
+                # Parcourir toutes les données
+                for df_temp in data.values():
                     if df_temp is not None and 'indicateur' in df_temp.columns:
                         for indicateur in df_temp['indicateur'].unique():
                             # Vérifier si l'indicateur a déjà été traité
