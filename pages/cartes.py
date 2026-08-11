@@ -745,9 +745,9 @@ def generate_evolution_graph(data, echelle, selected_indicator_info, selected_te
     with col_controls2:
         st.markdown("**Comparer avec :**")
         if departement_series_dict:
-            show_departements = st.checkbox("🏛️ Départements", value=True, key="show_departements")
+            show_departements = st.checkbox("🏛️ Départements", value=False, key="show_departements")
         if region_series_dict:
-            show_regions = st.checkbox("🌍 Région", value=True, key="show_regions")
+            show_regions = st.checkbox("🌍 Région", value=False, key="show_regions")
     
     with col_controls3:
         st.markdown("**Ajouter des territoires :**")
