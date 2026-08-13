@@ -12,9 +12,9 @@ from collections import defaultdict
 # PARAMÈTRES DE CONFIGURATION
 # ============================================================================
 
-PRECISION_DECIMALES = 3
+PRECISION_DECIMALES = 4
 SEUIL_CENT = 0.01
-MAX_TERRITOIRES_COMPARAISON = 15  # Nombre max de territoires à comparer
+MAX_TERRITOIRES_COMPARAISON = 70  # Nombre max de territoires à comparer
 
 # ============================================================================
 # CONFIGURATION DES ÉCHELLES
@@ -510,24 +510,41 @@ def show_description(descriptions_dict, indicator_name, indicator_type, selected
         formatted = text.replace('\n', '  \n')
         return formatted
     
+    description_a_afficher = False
+    
     if indicator_type == 'individuel':
         description = descriptions_dict.get(indicator_name)
         if description and pd.notna(description) and description != '':
-            st.markdown("---")
+            description_a_afficher = True
             st.markdown("### 📝 Description de l'indicateur")
             formatted_desc = format_description(description)
             st.markdown(formatted_desc)
     
     elif indicator_type == 'groupe' and selected_indicators:
-        st.markdown("---")
-        st.markdown("### 📝 Descriptions des indicateurs sélectionnés")
-        
+        has_description = False
         for ind in selected_indicators:
-            description = descriptions_dict.get(ind)
-            if description and pd.notna(description) and description != '':
-                with st.expander(f"**{ind}**"):
-                    formatted_desc = format_description(description)
-                    st.markdown(formatted_desc)
+            if descriptions_dict.get(ind) and pd.notna(descriptions_dict.get(ind)) and descriptions_dict.get(ind) != '':
+                has_description = True
+                break
+        
+        if has_description:
+            description_a_afficher = True
+            st.markdown("### 📝 Descriptions des indicateurs sélectionnés")
+            
+            for ind in selected_indicators:
+                description = descriptions_dict.get(ind)
+                if description and pd.notna(description) and description != '':
+                    with st.expander(f"**{ind}**"):
+                        formatted_desc = format_description(description)
+                        st.markdown(formatted_desc)
+    
+    # Message de normalisation par ménages (intégré dans le même bloc)
+    if normalisation_type == "Par ménages" and menages_note:
+        if not description_a_afficher:
+            st.markdown("### 📝 Information sur la normalisation")
+        else:
+            st.markdown("")  # séparation
+        st.warning(f"⚠️ {menages_note}")
 
 # ============================================================================
 # FONCTIONS D'AMÉLIORATION DU TITRE
@@ -656,33 +673,29 @@ def generate_evolution_graph(data, echelle, selected_indicator_info, selected_te
     
     # === 1. PRÉPARER LES DONNÉES POUR LE GRAPHE ===
     
-    # 1.1 Données du territoire sélectionné
+    # 1.1 Données du territoire sélectionné (pour les stats)
     territory_series = all_data[all_data[code_col] == selected_territory_code].copy()
     territory_series = territory_series.groupby(date_col)['valeur'].mean().reset_index()
     
-    # 1.2 Moyenne par date (pour l'échelle considérée)
+    # 1.2 Moyenne par date
     mean_series = all_data.groupby(date_col)['valeur'].mean().reset_index()
     
-    # 1.3 Médiane par date (pour l'échelle considérée)
+    # 1.3 Médiane par date
     median_series = all_data.groupby(date_col)['valeur'].median().reset_index()
     
     # === 2. RÉCUPÉRATION DES DONNÉES DÉPARTEMENTALES ET RÉGIONALES ===
     
-    departement_series_dict = {}  # Pour stocker plusieurs départements
-    region_series_dict = {}       # Pour stocker plusieurs régions
+    departement_series_dict = {}
+    region_series_dict = {}
     
-    # Pour toutes les échelles, essayer de récupérer les départements et régions
-    # Récupérer tous les départements disponibles
     dept_data = data.get('departements')
     if dept_data is not None and not dept_data.empty:
-        # Filtrer par indicateur
         if is_group:
             dept_filtered = dept_data[dept_data['indicateur'].isin(indicator_list)]
         else:
             dept_filtered = dept_data[dept_data['indicateur'] == indicator_name]
         
         if not dept_filtered.empty:
-            # Grouper par département et date
             for dept_code in dept_filtered['code_departement'].unique():
                 dept_subset = dept_filtered[dept_filtered['code_departement'] == dept_code]
                 dept_series = dept_subset.groupby(date_col)['valeur'].mean().reset_index()
@@ -692,10 +705,8 @@ def generate_evolution_graph(data, echelle, selected_indicator_info, selected_te
                     'libelle': dept_libelle
                 }
     
-    # Récupérer toutes les régions disponibles
     region_data = data.get('regions')
     if region_data is not None and not region_data.empty:
-        # Filtrer par indicateur
         if is_group:
             region_filtered = region_data[region_data['indicateur'].isin(indicator_list)]
         else:
@@ -713,10 +724,8 @@ def generate_evolution_graph(data, echelle, selected_indicator_info, selected_te
     
     # === 3. INTERFACE DE SÉLECTION ===
     
-    st.markdown("---")
     st.markdown("### 📈 Évolution temporelle")
     
-    # Déterminer le libellé de l'échelle pour la moyenne/médiane
     echelle_label = ECHELLES_CONFIG[echelle]['label']
     if echelle == 'communes':
         echelle_label_plural = 'communes'
@@ -727,13 +736,10 @@ def generate_evolution_graph(data, echelle, selected_indicator_info, selected_te
     else:
         echelle_label_plural = 'régions'
     
-    # Contrôles pour afficher/masquer les séries
     col_controls1, col_controls2, col_controls3 = st.columns([1, 1, 1])
     
     show_mean = True
     show_median = True
-    
-    # Par défaut, afficher tous les départements et régions disponibles
     show_departements = False
     show_regions = False
     
@@ -750,60 +756,67 @@ def generate_evolution_graph(data, echelle, selected_indicator_info, selected_te
             show_regions = st.checkbox("🌍 Région", value=False, key="show_regions")
     
     with col_controls3:
-        st.markdown("**Ajouter des territoires :**")
-        # Multiselect pour ajouter d'autres territoires de la même échelle
+        st.markdown("**Ajouter/Retirer des territoires :**")
         all_territoires = all_data[[code_col, libelle_col]].drop_duplicates()
-        all_territoires = all_territoires[all_territoires[code_col] != selected_territory_code]
+        territoire_options = sorted(all_territoires[libelle_col].tolist())
         
-        if not all_territoires.empty:
-            territoire_options = sorted(all_territoires[libelle_col].tolist())
-            
-            selected_territoires_extra = st.multiselect(
-                f"Territoires supplémentaires (max {MAX_TERRITOIRES_COMPARAISON})",
-                options=territoire_options,
-                default=[],
-                key="territoires_extra"
-            )
-            
-            if len(selected_territoires_extra) > MAX_TERRITOIRES_COMPARAISON:
-                st.warning(f"⚠️ Maximum {MAX_TERRITOIRES_COMPARAISON} territoires supplémentaires")
-                selected_territoires_extra = selected_territoires_extra[:MAX_TERRITOIRES_COMPARAISON]
-        else:
-            selected_territoires_extra = []
-    
-    # Récupérer les données des territoires supplémentaires
-    extra_series = []
-    for territoire_libelle in selected_territoires_extra:
-        code = all_territoires[all_territoires[libelle_col] == territoire_libelle][code_col].iloc[0]
-        extra_data = all_data[all_data[code_col] == code].copy()
-        if not extra_data.empty:
-            extra_series.append({
-                'data': extra_data.groupby(date_col)['valeur'].mean().reset_index(),
-                'libelle': territoire_libelle,
-                'code': code
-            })
+        # Sélection par défaut : le territoire sélectionné
+        default_selection = [territory_libelle] if territory_libelle in territoire_options else []
+        
+        selected_territoires = st.multiselect(
+            f"Sélectionnez les territoires à afficher (max {MAX_TERRITOIRES_COMPARAISON})",
+            options=territoire_options,
+            default=default_selection,
+            key="territoires_select"
+        )
+        
+        if len(selected_territoires) > MAX_TERRITOIRES_COMPARAISON:
+            st.warning(f"⚠️ Maximum {MAX_TERRITOIRES_COMPARAISON} territoires")
+            selected_territoires = selected_territoires[:MAX_TERRITOIRES_COMPARAISON]
     
     # === 4. GÉNÉRATION DU GRAPHE ===
     
     fig = go.Figure()
-    
-    # Palette de couleurs
-    colors = px.colors.qualitative.Plotly
+    territory_colors = px.colors.qualitative.Plotly
     dept_colors = px.colors.qualitative.Set2
     region_colors = px.colors.qualitative.Set1
     
-    # 4.1 Territoire sélectionné (en bleu foncé, trait plein, plus épais)
-    if not territory_series.empty:
-        fig.add_trace(go.Scatter(
-            x=territory_series['date'],
-            y=territory_series['valeur'],
-            mode='lines+markers',
-            name=territory_libelle,
-            line=dict(color='#1f77b4', width=3),
-            marker=dict(size=8)
-        ))
+    # 4.1 Territoire sélectionné (style bleu épais) et autres territoires
+    selected_territory_libelle = territory_libelle
+    other_territories = [t for t in selected_territoires if t != selected_territory_libelle]
     
-    # 4.2 Moyenne (en gris, pointillés)
+    # Territoire sélectionné
+    if selected_territory_libelle in selected_territoires:
+        code = all_territoires[all_territoires[libelle_col] == selected_territory_libelle][code_col].iloc[0]
+        territory_data_plot = all_data[all_data[code_col] == code].copy()
+        if not territory_data_plot.empty:
+            territory_series_plot = territory_data_plot.groupby(date_col)['valeur'].mean().reset_index()
+            fig.add_trace(go.Scatter(
+                x=territory_series_plot['date'],
+                y=territory_series_plot['valeur'],
+                mode='lines+markers',
+                name=selected_territory_libelle,
+                line=dict(color='#1f77b4', width=3),
+                marker=dict(size=8)
+            ))
+    
+    # Autres territoires
+    for i, territoire_libelle in enumerate(other_territories):
+        code = all_territoires[all_territoires[libelle_col] == territoire_libelle][code_col].iloc[0]
+        extra_data = all_data[all_data[code_col] == code].copy()
+        if not extra_data.empty:
+            extra_series = extra_data.groupby(date_col)['valeur'].mean().reset_index()
+            color_idx = i % len(territory_colors)
+            fig.add_trace(go.Scatter(
+                x=extra_series['date'],
+                y=extra_series['valeur'],
+                mode='lines+markers',
+                name=territoire_libelle,
+                line=dict(color=territory_colors[color_idx], width=2),
+                marker=dict(size=7)
+            ))
+    
+    # 4.2 Moyenne
     if show_mean and not mean_series.empty:
         fig.add_trace(go.Scatter(
             x=mean_series['date'],
@@ -814,7 +827,7 @@ def generate_evolution_graph(data, echelle, selected_indicator_info, selected_te
             marker=dict(size=6)
         ))
     
-    # 4.3 Médiane (en gris clair, pointillés)
+    # 4.3 Médiane
     if show_median and not median_series.empty:
         fig.add_trace(go.Scatter(
             x=median_series['date'],
@@ -825,7 +838,7 @@ def generate_evolution_graph(data, echelle, selected_indicator_info, selected_te
             marker=dict(size=6)
         ))
     
-    # 4.4 Départements (en orange/rouge)
+    # 4.4 Départements
     if show_departements and departement_series_dict:
         dept_idx = 0
         for dept_code, dept_info in departement_series_dict.items():
@@ -841,7 +854,7 @@ def generate_evolution_graph(data, echelle, selected_indicator_info, selected_te
                 ))
                 dept_idx += 1
     
-    # 4.5 Régions (en vert)
+    # 4.5 Régions
     if show_regions and region_series_dict:
         reg_idx = 0
         for region_code, region_info in region_series_dict.items():
@@ -857,19 +870,7 @@ def generate_evolution_graph(data, echelle, selected_indicator_info, selected_te
                 ))
                 reg_idx += 1
     
-    # 4.6 Territoires supplémentaires
-    for i, extra in enumerate(extra_series):
-        color_idx = i % len(colors)
-        fig.add_trace(go.Scatter(
-            x=extra['data']['date'],
-            y=extra['data']['valeur'],
-            mode='lines+markers',
-            name=extra['libelle'],
-            line=dict(color=colors[color_idx], width=2),
-            marker=dict(size=7)
-        ))
-    
-    # Mise en forme du graphe
+    # Mise en forme
     fig.update_layout(
         title=f"Évolution de {selected_indicator_info['groupe_nom'] if selected_indicator_info['type'] == 'groupe' else selected_indicator_info['indicateur_nom']}",
         xaxis_title="Date",
@@ -883,7 +884,7 @@ def generate_evolution_graph(data, echelle, selected_indicator_info, selected_te
             x=1
         ),
         height=400,
-        margin=dict(l=50, r=50, t=50, b=50),
+        margin=dict(l=50, r=50, t=80, b=50),
         xaxis=dict(
             tickformat="%d/%m/%Y",
             tickangle=45
@@ -896,6 +897,7 @@ def generate_evolution_graph(data, echelle, selected_indicator_info, selected_te
     )
     
     st.plotly_chart(fig, use_container_width=True)
+
 # ============================================================================
 # FONCTION PRINCIPALE D'AFFICHAGE
 # ============================================================================
@@ -1005,7 +1007,6 @@ def show(data):
     # Interface de sélection pour les groupes
     selected_indicators_for_group = None
     if selected_indicator_info['type'] == 'groupe':
-        st.markdown("---")
         with st.container():
             selected_indicators_for_group = get_group_selection_interface(
                 selected_indicator_info, 
@@ -1018,21 +1019,24 @@ def show(data):
                 return
     
     # Normalisation et couleurs
-    st.markdown("---")
-    col_norm, col_scale1, col_scale2 = st.columns([0.7, 0.5, 0.5])
-    
+    col_norm, col_palette, col_echelle = st.columns([0.5, 0.5, 0.7])
+
     with col_norm:
         normalisation_options = ["Aucune", "Par surface", "Par population", "Par ménages"]
         normalisation_option = st.selectbox("Normalisation", normalisation_options)
-    
-    with col_scale1:
-        scale_options = st.selectbox("Palette", ["Blues", "Greens", "Darkmint", "ice", "Reds"])
-    
-    with col_scale2:
-        stat_scale_options = ["Auto", "Min-Max", "Percentiles", "Moyenne ± 2σ"]
-        stat_scale = st.selectbox("Échelle", stat_scale_options, index=0)
-        reverse_scale = st.checkbox("Inverser")
-    
+
+    with col_palette:
+        palette_choices = ["Blues", "Greens", "Darkmint", "ice", "Reds"]
+        selected_palette = st.selectbox("Palette", palette_choices)  # Renommer pour éviter confusion
+
+    with col_echelle:
+        col_scale, col_inv = st.columns([0.7, 0.3])
+        with col_scale:
+            stat_scale_choices = ["Auto", "Min-Max", "Percentiles", "Moyenne ± 2σ"]
+            stat_scale = st.selectbox("Échelle", stat_scale_choices, index=0)
+        with col_inv:
+            st.write("")  # Pour aligner verticalement
+            reverse_scale = st.checkbox("Inverser")
     # Données de normalisation
     surface_df, population_df = get_surface_population_data(df_to_use, echelle, selected_date)
     date_col = 'date'
@@ -1060,7 +1064,7 @@ def show(data):
             filtered_df, menages_notes = normalize_by_menages(filtered_df, code_col, date_col, menages_data)
             if 'valeur_normalisee' in filtered_df.columns:
                 valeur_colonne = 'valeur_normalisee'
-                suffixe_titre = " (par ménage)"
+                suffixe_titre = " (par ménages)"
                 menages_note = "Attention: Du fait de la disponibilité de la donnée ménages uniquement pour 3 années (2012, 2017 et 2023), la division des données par le nombre de ménages se fait en utilisant la plus proche année antérieure. Exemple: Les données de 2020 seront divisées par les données de ménages de 2017"
             else:
                 valeur_colonne = 'valeur'
@@ -1098,7 +1102,7 @@ def show(data):
             filtered_df, menages_notes = normalize_by_menages(filtered_df, code_col, date_col, menages_data)
             if 'valeur_normalisee' in filtered_df.columns:
                 valeur_colonne = 'valeur_normalisee'
-                suffixe_titre = " (par ménage)"
+                suffixe_titre = " (par ménages)"
                 menages_note = "Attention: Du fait de la disponibilité de la donnée ménages uniquement pour 3 années (2012, 2017 et 2023), la division des données par le nombre de ménages se fait en utilisant l'année précédente. Exemple: Les données de 2020 seront divisées par les données de ménages de 2017"
             else:
                 valeur_colonne = 'valeur'
@@ -1124,9 +1128,25 @@ def show(data):
         )
         source_key = None
     
-    # === AFFICHAGE DU MESSAGE D'AVERTISSEMENT POUR LES MÉNAGES ===
-    if normalisation_option == "Par ménages" and menages_note:
-        st.warning(f"⚠️ {menages_note}")
+    # === AFFICHAGE DE LA DESCRIPTION (AVANT LA CARTE) ===
+    # Afficher la description avant la carte
+    if selected_indicator_info['type'] == 'individuel':
+        show_description(
+            descriptions_dict,
+            selected_indicator_info['indicateur_nom'],
+            'individuel',
+            normalisation_type=normalisation_option,
+            menages_note=menages_note
+        )
+    else:
+        show_description(
+            descriptions_dict,
+            selected_indicator_info['groupe_nom'],
+            'groupe',
+            selected_indicators=selected_indicators_for_group,
+            normalisation_type=normalisation_option,
+            menages_note=menages_note
+        )
     
     # Nettoyer les valeurs proches de 100
     if valeur_colonne in filtered_df.columns:
@@ -1160,7 +1180,7 @@ def show(data):
     if stat_scale_original == "Auto":
         scale_display_name = f"Auto → {scale_display_name}"
     
-    color_scale = scale_options + ("_r" if reverse_scale else "")
+    color_scale = selected_palette + ("_r" if reverse_scale else "")
     
     # Création de la carte
     geojson = load_geojson(config['geojson'])
@@ -1186,9 +1206,9 @@ def show(data):
     
     fig.update_geos(fitbounds="locations", visible=False)
     fig.update_layout(
-        width=1000, 
-        height=900,
-        margin=dict(l=0, r=0, t=50, b=10)
+        width=900, 
+        height=700,
+        margin=dict(l=0, r=0, t=30, b=10)
     )
     st.plotly_chart(fig, use_container_width=True)
     
@@ -1204,25 +1224,6 @@ def show(data):
             selected_territory_code=selected_territory_code,
             indicator_to_group=indicator_to_group,
             selected_indicators_for_group=selected_indicators_for_group
-        )
-    
-    # Affichage de la description
-    if selected_indicator_info['type'] == 'individuel':
-        show_description(
-            descriptions_dict,
-            selected_indicator_info['indicateur_nom'],
-            'individuel',
-            normalisation_type=normalisation_option,
-            menages_note=menages_note
-        )
-    else:
-        show_description(
-            descriptions_dict,
-            selected_indicator_info['groupe_nom'],
-            'groupe',
-            selected_indicators=selected_indicators_for_group,
-            normalisation_type=normalisation_option,
-            menages_note=menages_note
         )
     
     # Statistiques
@@ -1317,7 +1318,7 @@ def show(data):
             elif normalisation_option == "Par population":
                 display_df.rename(columns={'valeur_normalisee': f'Valeur (pour 1000 hab.)'}, inplace=True)
             elif normalisation_option == "Par ménages":
-                display_df.rename(columns={'valeur_normalisee': f'Valeur (par ménage)'}, inplace=True)
+                display_df.rename(columns={'valeur_normalisee': f'Valeur (par ménages)'}, inplace=True)
         elif valeur_colonne == 'valeur':
             display_df.rename(columns={'valeur': 'Valeur'}, inplace=True)
         
