@@ -106,6 +106,7 @@ pages_to_check = [
     ("🏠 Accueil", "accueil"),
     ("🗺️ Cartes", "cartes"),
     ("📊 Données brutes", "donnees_brutes"),
+    ("⛽ Evolution du prix des carburants", "prix_carburants"),
     ("ℹ️ À propos", "a_propos")
 ]
 
