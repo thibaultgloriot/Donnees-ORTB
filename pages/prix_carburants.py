@@ -802,7 +802,7 @@ def show():
         ### Sources des données
         
         - **Prix des carburants** : Plateforme www.prix-carburants.gouv.fr
-        - **Motorisations des voitures neuves** : Données régionales
+        - **Motorisations des voitures neuves** : https://mobilites-durables.transports.gouv.fr/indicateurs/parc-de-vehicules/#immatriculation-neuves-des-vehicules
         - **Pétrole Brent** : https://www.kaggle.com/datasets/lakshmi2305/crude-oil-brent-prices/data?select=crude_oil_brent.csv
         - **Gaz naturel** : https://github.com/datasets/natural-gas/blob/main/data/daily.csv
         - **Prix d'échange Euro/dollar** : https://data.ecb.europa.eu/data/datasets/EXR/EXR.D.$.EUR.SP00.A
