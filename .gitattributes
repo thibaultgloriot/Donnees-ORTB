@@ -1,3 +1,4 @@
+*.csv filter=lfs diff=lfs merge=lfs -text
 data/final_df_communes.csv filter=lfs diff=lfs merge=lfs -text
 data/prix_carburants_epci_2013_2026.csv filter=lfs diff=lfs merge=lfs -text
 data/*.csv filter=lfs diff=lfs merge=lfs -text
