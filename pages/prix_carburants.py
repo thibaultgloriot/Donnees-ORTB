@@ -199,7 +199,7 @@ def show():
     
     # --- SECTION 1: Carte des prix ---
     st.header("🗺️ Carte des prix des carburants")
-    st.markdown("Visualisez le prix d'un carburant à une date donnée sur une carte interactive.<br>Les prix affichés correspondent à la moyenne des prix des stations services du territoire, à la date considérée", unsafe_allow_html=True)
+    st.markdown("Visualisez le prix d'un carburant à une date donnée sur une carte interactive.<br>Les prix affichés correspondent à la moyenne des prix des stations services du territoire, à la date considérée.", unsafe_allow_html=True)
     
     # Sélecteurs pour la carte
     col1, col2, col3 = st.columns(3)
@@ -218,7 +218,7 @@ def show():
         )
     
     with col2:
-        carburants = ['SP95', 'SP98', 'Gazole' ,'E10', 'E85', 'GPLc']
+        carburants = ['SP98', 'SP95', 'Gazole' ,'E10', 'E85', 'GPLc']
         carburant_choice = st.selectbox(
             "Type de carburant",
             options=carburants,
@@ -427,7 +427,7 @@ def show():
             region_choice = None
     
     with col2:
-        carburants_all = ['SP95', 'SP98', 'Gazole' ,'E10', 'E85', 'GPLc']
+        carburants_all = ['SP98', 'SP95', 'Gazole' ,'E10', 'E85', 'GPLc']
         carburants_selected = st.multiselect(
             "Carburants à afficher",
             options=carburants_all,
