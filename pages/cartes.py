@@ -1202,7 +1202,7 @@ def show(data):
         range_color=range_color,
         scope="europe",
         center=center,
-        title=f"{titre_indicateur}{suffixe_titre} le {selected_date}<br><sub>Méthode : {scale_display_name}</sub>{source_text}")
+        title=f"{titre_indicateur}{suffixe_titre} le {selected_date.strftime("%d/%m/%Y")}<br><sub>Méthode : {scale_display_name}</sub>{source_text}")
     
     fig.update_geos(fitbounds="locations", visible=False)
     fig.update_layout(
