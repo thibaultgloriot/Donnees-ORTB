@@ -13,8 +13,14 @@ st.set_page_config(
 )
 
 # Chargement du logo
-logo = Image.open('assets/logo.jpg')
+BASE_DIR = Path(__file__).resolve().parent
+LOGO_PATH = BASE_DIR / "assets" / "logo.jpg"
 
+try:
+    logo = Image.open(LOGO_PATH)
+except Exception as e:
+    logo = None
+    st.warning(f"Logo introuvable ({LOGO_PATH}) : {e}")
 # Chargement des données
 @st.cache_data
 def load_data(filepath, code_col, libelle_col):
