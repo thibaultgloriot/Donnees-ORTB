@@ -58,8 +58,8 @@ def show():
     st.write("""
     Ce site est hébergé par :  
     **GéoBretagne**  
-    [Adresse complète : https://geobretagne.fr]  
-    [Contact : https://geobretagne.fr/partenariat/contact]
+    Adresse complète : https://geobretagne.fr 
+    Contact : https://geobretagne.fr/partenariat/contact
     """)
 
     st.subheader("3. Propriété intellectuelle")
