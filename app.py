@@ -14,15 +14,9 @@ st.set_page_config(
 )
 
 # Chargement du logo
-BASE_DIR = Path(__file__).resolve().parent
-LOGO_PATH = BASE_DIR / "assets" / "logo.jpg"
-
+logo = Image.open('assets/logo.jpg')
 logo_img = None
-try:
-    logo_img = Image.open(LOGO_PATH)
-    logo_img.load()          # force le décodage immédiat → lève si corrompu
-except Exception as e:
-    st.warning(f"Logo non chargé : {e}")
+
 # Chargement des données
 @st.cache_data
 def load_data(filepath, code_col, libelle_col):
@@ -126,10 +120,8 @@ for page_name, page_file in pages_to_check:
 st.markdown("""<style>[data-testid="stSidebarNav"] {display: none;}</style>""", unsafe_allow_html=True)
 
 with st.sidebar:
-    if logo_img is not None:
-        st.image(logo_img, width=200)
-    else:
-        st.write("🖼️")
+    
+    st.image(logo)
     st.title("Navigation")
     
     page_options = [name for name, _ in available_pages]
