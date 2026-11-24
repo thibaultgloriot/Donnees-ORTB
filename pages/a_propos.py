@@ -36,9 +36,9 @@ def show():
     """)
     st.title(" Journal des mises à jour")
     st.write("""
-    -v1.0 Début 2026 : Initialisation du projet 
-    -v2.0 Aout 2026 : Améliorations diverses : ajout de fonctionalités, optimisation de l'ergonomie, ajout d'indicateurs
-    -v2.1 novembre 2026 : intégration dans GéoBretagne""")
+    - v1.0 Début 2026 : Initialisation du projet 
+    - v2.0 Aout 2026 : Améliorations diverses : ajout de fonctionalités, optimisation de l'ergonomie, ajout d'indicateurs
+    - v2.1 novembre 2026 : intégration dans GéoBretagne""")
     
     
     st.title("⚖️ Mentions légales")
