@@ -125,7 +125,13 @@ for page_name, page_file in pages_to_check:
 st.markdown("""<style>[data-testid="stSidebarNav"] {display: none;}</style>""", unsafe_allow_html=True)
 
 with st.sidebar:
-    st.image(logo, width=200)
+    st.write("DEBUG logo =", logo)
+    st.write("DEBUG LOGO_PATH =", LOGO_PATH)
+    st.write("DEBUG existe =", LOGO_PATH.exists())
+    if logo is not None:
+        st.image(logo, width=200)
+    else:
+        st.error("logo est None → Image.open a échoué")
     st.title("Navigation")
     
     page_options = [name for name, _ in available_pages]
