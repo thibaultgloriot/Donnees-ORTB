@@ -1,7 +1,7 @@
 import streamlit as st
 
 def show():
-    st.title("ℹ️ À propos")
+    st.title("ℹ️ À propos et mentions légales")
     
     st.write("""
     ## Plateforme de visualisation des données de l'ORTB
@@ -32,9 +32,44 @@ def show():
     - Site Internet de l'ORTB : www.observatoire-transports-bretagne.fr
     
     ### Version
-    Version 2.0 - Août 2026
+    Version 2.1 - Novembre 2026
     """)
+    st.title(" Journal des mises à jour")
+    st.write("""
+    -v1.0 Début 2026 : Initialisation du projet 
+    -v2.0 Aout 2026 : Améliorations diverses : ajout de fonctionalités, optimisation de l'ergonomie, ajout d'indicateurs
+    -v2.1 novembre 2026 : intégration dans GéoBretagne""")
     
+    
+    st.title("⚖️ Mentions légales")
+
+    st.subheader("1. Éditeur du site")
+    st.write("""
+    **Observatoire Régional des Transports de Bretagne (ORTB)**  
+    [Association Loi 1901, créée en janvier 1194]  
+    [10 rue Maurice Fabre - CS 96515 - 35065 Rennes cedex]  
+    [Numéro SIRET / RCS]  
+    Directeur de la publication : [M.Patrick Lahaye]  
+    Contact : ortb@i-carre.net - Tél : [ortb@i-carre.net]
+    """)
+
+    st.subheader("2. Hébergement")
+    st.write("""
+    Ce site est hébergé par :  
+    **GéoBretagne**  
+    [Adresse complète : https://geobretagne.fr]  
+    [Contact : https://geobretagne.fr/partenariat/contact]
+    """)
+
+    st.subheader("3. Propriété intellectuelle")
+    st.write("""
+    L'intégralité de ce site est protégé par le droit d'auteur. Toute reproduction, même partielle, est interdite sans l'autorisation expresse de l'ORTB.
+    """)
+
+    st.subheader("4. Données personnelles et cookies")
+    st.write("""
+    Pour plus d'informations sur la gestion de vos données personnelles et l'utilisation des cookies, nous vous invitons à consulter notre [Politique de confidentialité](lien-vers-votre-page-rgpd).
+    """)
     st.divider()
     
     col1, col2 = st.columns(2)
@@ -53,6 +88,4 @@ def show():
         - **Framework** : Streamlit
         - **Visualisation** : Plotly, Pandas
         - **Cartes** : GeoJSON, IGN data
-        - **Hébergement** : Streamlit Cloud
-
         """)
