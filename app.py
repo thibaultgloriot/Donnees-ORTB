@@ -107,7 +107,7 @@ pages_to_check = [
     ("🗺️ Cartes", "cartes"),
     ("📊 Données brutes", "donnees_brutes"),
     ("⛽ Evolution du prix des carburants", "prix_carburants"),
-    ("ℹ️ À propos", "a_propos")
+    ("ℹ️ À propos et mentions légales", "a_propos")
 ]
 
 for page_name, page_file in pages_to_check:
