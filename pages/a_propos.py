@@ -49,6 +49,7 @@ def show():
     Association Loi 1901, créée en janvier 1994  
     10 rue Maurice Fabre - CS 96515 - 35065 Rennes cedex  
     Numéro SIRET : 41289657300026
+    
     Directeur de la publication : M.Patrick Lahaye  
     Contact : ortb@i-carre.net - Tél : 06 59 61 63 54
     """)
